@@ -68,6 +68,8 @@ var a;
 (a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-token-login")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-content-container")).style.display="block";
+delete window.CryptoJS;
+delete window.encapi;
 };
 ge("ly65lgp-button-submit-token").addEventListener("click",function(){
 load_start();
@@ -92,7 +94,7 @@ if(da===false){
 load_fail("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
 return false;
 }
-da="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+a[1];
+a="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+a[1];
 encapi.sendRequest(api_addr_base,"POST",function(data,cu){
 try{
 data=JSON.parse(data);
@@ -104,8 +106,14 @@ if(data["code"]!=0){
 load_fail("数据库登录失败！"+data["msg"]);
 return false;
 }
-//ge("ly65lgp-div-content-container").innerHTML=data;
-},da,true); //f(url,mtd,cbk,data,sync);
+da=encapi.decrypt({"data":data["data"],"k":da[1],"i":da[2]});
+if(da===false){
+load_fail("encapi.ecrypt失败！请联系管理员或更换浏览器环境重试");
+return false;
+}
+ge("ly65lgp-div-content-container").innerHTML=da;
+load_succ();
+},a,true); //f(url,mtd,cbk,data,sync);
 });
 
 
@@ -134,7 +142,7 @@ ge("ly65lgp-div-token-login").style.display="block";
 <span style="color:#888888;">提示：大部分文档可以不填密码直接访问</span>
 <br>
 <br>
-请输入密码：<input id="ly65lgp-input-token" placeholder="或许可以留空...？">
+请输入密码：<input id="ly65lgp-input-token" placeholder="或许可以留空试试...？">
 <br>
 <br>
 <button id="ly65lgp-button-submit-token" style="border:2px solid #4bccff;background-color:#dffff8;">提交访问申请</button>

@@ -52,7 +52,7 @@ ge("ly65lgp-div-error-message").style.display="none";
 ge("ly65lgp-div-processing-tip").style.display="block";
 };
 var load_fail=function(str){
-encapi.detroyToken();
+encapi.destroyToken();
 if(str.length<=0){
 str="未定义的错误消息";
 }
@@ -62,7 +62,7 @@ ge("ly65lgp-div-processing-tip").style.display="none";
 ge("ly65lgp-div-token-login").style.display="block";
 };
 var load_succ=function(){
-encapi.detroyToken();
+encapi.destroyToken();
 var a;
 (a=ge("ly65lgp-div-error-message")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);

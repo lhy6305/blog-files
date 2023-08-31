@@ -243,7 +243,8 @@ echo $dat;
 exit;
 }
 
-$dt=get_authed_data(true);
+//$dt=get_authed_data(true);
+$dt=get_authed_data();
 //[$error_flag,[time,salt,[dec]data,error_type],$key,$i];
 
 if($dt[0]){

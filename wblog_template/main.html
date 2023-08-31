@@ -1,40 +1,39 @@
 <script class="script-custom" style="display:none;">
-//include libcrypto.js
-//include libencapi.js
+//include libcrypto_encapi_merged.js
 </script>
 
 <script class="script-custom" style="display:none;">
 (function(){
-window.ge=function(id){
+var ge=function(id){
 return document.getElementById(id);
 };
 window.addEventListener("load",function(){
 var load_start=function(){
-window.ge("span-error-tip").innerHTML="";
-window.ge("div-token-login").style.display="none";
-window.ge("div-error-message").style.display="none";
-window.ge("div-processing-tip").style.display="block";
+ge("span-error-tip").innerHTML="";
+ge("div-token-login").style.display="none";
+ge("div-error-message").style.display="none";
+ge("div-processing-tip").style.display="block";
 };
 var load_fail=function(str){
 if(str.length<=0){
 str="未定义的错误消息";
 }
-window.ge("span-error-tip").innerHTML=str;
-window.ge("div-error-message").style.display="block";
-window.ge("div-processing-tip").style.display="none";
-window.ge("div-token-login").style.display="block";
+ge("span-error-tip").innerHTML=str;
+ge("div-error-message").style.display="block";
+ge("div-processing-tip").style.display="none";
+ge("div-token-login").style.display="block";
 };
 var load_succ=function(){
 var a;
-(a=window.ge("div-error-message")).parentNode.removeChild(a);
-(a=window.ge("div-processing-tip")).parentNode.removeChild(a);
-(a=window.ge("div-token-login")).parentNode.removeChild(a);
-(a=window.ge("div-content-container")).style.display="block";
+(a=ge("div-error-message")).parentNode.removeChild(a);
+(a=ge("div-processing-tip")).parentNode.removeChild(a);
+(a=ge("div-token-login")).parentNode.removeChild(a);
+(a=ge("div-content-container")).style.display="block";
 };
-window.ge("button-submit-token").addEventListener("click",function(){
+ge("button-submit-token").addEventListener("click",function(){
 load_start();
-var a=window.ge("input-token").value;
-window.ge("input-token").value="";
+var a=ge("input-token").value;
+ge("input-token").value="";
 if(a.length<=0){
 a="ly65";
 }
@@ -53,23 +52,18 @@ a=a[1];
 alert(a);
 });
 });
-})();
-</script>
 
-<script id="script-custom-loader" style="display:none;">
-(function(){
+
 window.addEventListener("load",function(){
 var a;
 do{
 a=document.getElementsByClassName("script-custom");
 a[0].parentNode.removeChild(a[0]);
 }while(a.length>0);
-(a=window.ge("div-script-loading-tip")).parentNode.removeChild(a);
-window.ge("div-token-login").style.display="block";
-window.setTimeout(function(){
-(a=window.ge("script-custom-loader")).parentNode.removeChild(a);
-},0);
+(a=ge("div-script-loading-tip")).parentNode.removeChild(a);
+ge("div-token-login").style.display="block";
 });
+
 })();
 </script>
 

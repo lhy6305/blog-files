@@ -153,8 +153,6 @@ ge("ly65lgp-div-token-login").style.display="block";
 <div id="ly65lgp-div-processing-tip" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#6db517;background-color:#ffeefb;">
 正在处理您的请求，请稍后...
 <br>
-注意：本登录模板尚未编写完成，这条消息之后页面将无变化，请停止等待
-<br>
 </div>
 
 <div id="ly65lgp-div-content-container" style="display:none;"></div>

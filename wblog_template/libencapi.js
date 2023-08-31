@@ -182,16 +182,19 @@ encapi.log("XHR object construct failed");
 return false;
 }
 }
+if(sync){
 cu.onreadystatechange=function(){
-if(cu.readyState==4){
+if(cu.readyState==XMLHttpRequest.DONE||4){
 cbk(cu.responseText,cu);
 }
 };
+}
 cu.onerror=function(){
 cbk(false,cu);
 };
 cu.open(mtd,url,sync);
 cu.send(dta);
+return cu;
 };
 
 window.encapi=encapi;

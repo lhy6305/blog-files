@@ -159,6 +159,41 @@ return false;
 }
 };
 
+encapi.sendRequest=function(url,mtd,cbk,dta,sync){
+if(sync===undefined){
+if(typeof cbk=="function"){
+sync=true;
+}else{
+sync=false;
+}
+}
+if(typeof cbk!="function"){
+cbk=new Function();
+}
+mtd=mtd.toUpperCase();
+var cu;
+try{
+cu=new XMLHttpRequest();
+}catch(e1){
+try{
+cu=new ActiveXObject("Microsoft.XMLHTTP");
+}catch(e2){
+window.alert("您的浏览器不支持XHR，无法发送请求到服务器");
+return false;
+}
+}
+cu.onreadystatechange=function(){
+if(cu.readyState==4){
+cbk(cu.responseText,cu);
+}
+};
+cu.onerror=function(){
+cbk(false,cu);
+};
+cu.open(mtd,url,sync);
+cu.send(dta);
+};
+
 window.encapi=encapi;
 })();
 /*

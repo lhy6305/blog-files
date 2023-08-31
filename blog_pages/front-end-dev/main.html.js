@@ -6,7 +6,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@b27d838c1b2b5b154eb8e52367736e595a80d4da/blog_pages/libcrypto_encapi_merged.js">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@9977e9e39e467967c7c9fe33c94f0a536fd4cda8/blog_pages/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -142,7 +142,7 @@ ge("ly65lgp-div-token-login").style.display="block";
 <span style="color:#888888;">提示：大部分文档可以不填密码直接访问</span>
 <br>
 <br>
-请输入密码：<input id="ly65lgp-input-token" placeholder="或许可以留空试试...？">
+请输入密码：<input id="ly65lgp-input-token" placeholder="或许可以留空试试...？" style="width:400px;max-width: 60vw;">
 <br>
 <br>
 <button id="ly65lgp-button-submit-token" style="border:2px solid #4bccff;background-color:#dffff8;">提交访问申请</button>

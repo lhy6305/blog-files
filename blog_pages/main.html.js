@@ -80,11 +80,11 @@ console.log(data);
 
 
 window.addEventListener("load",function(){
-var a;
-do{
-a=document.getElementsByClassName("script-custom");
+var a=[0];
+while(a.length>0){
+a=document.getElementsByClassName("ly65lgp-script-custom");
 a[0].parentNode.removeChild(a[0]);
-}while(a.length>0);
+}
 (a=ge("ly65lgp-div-script-loading-tip")).parentNode.removeChild(a);
 ge("ly65lgp-div-token-login").style.display="block";
 });

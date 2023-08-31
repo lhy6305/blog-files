@@ -26,7 +26,7 @@ return $d;
 }
 
 function get_key_by_aid($aid){
-$ks=dirname(__FILE__)."/internal/blog_pages/0_blog_page_pwd.json";
+$ks=dirname(__FILE__)."/0_blog_page_pwd.json";
 if(!is_readable($ks)){
 show_error_and_exit("request_failed_keystore_not_found",500);
 }

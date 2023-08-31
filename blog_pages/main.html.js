@@ -1,4 +1,4 @@
-<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@0710d88472e32f06129e7d9f6202363350d0893e/blog_pages/libcrypto_encapi_merged.js">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@8b88b0b6254a141370256069e45b65dd0bdbcc48/blog_pages/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 

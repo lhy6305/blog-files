@@ -187,11 +187,11 @@ return false;
 if(sync){
 cu.onreadystatechange=function(){
 if(cu.readyState==(XMLHttpRequest.DONE||4)){
+cbk(cu.responseText,cu);
 try{
 cu.abort();
 }catch(e){
 }
-cbk(cu.responseText,cu);
 }
 };
 }

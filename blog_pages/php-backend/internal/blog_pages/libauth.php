@@ -41,7 +41,7 @@ return "ly65_common_key";
 if(array_key_exists($aid,$ks)){
 return $ks[$aid];
 }
-show_error_and_exit("request_failed_archive_key_not_found",400);
+show_error_and_exit("request_failed_article_key_not_found",400);
 }
 
 function checkauth($dt){
@@ -102,7 +102,6 @@ md5(time)
 
 $t=$dt["time"];
 $k=get_key_by_aid($dt["aid"]);
-$k=$k[0];
 $s=$dt["salt"];
 
 $psi=substr(md5(hex2bin(hash("sha256",$s.$t.hex2bin(hash("sha512",$s.$k.$s)).$t))),0,6);

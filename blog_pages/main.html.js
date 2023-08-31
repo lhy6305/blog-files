@@ -1,4 +1,4 @@
-<script class="ly65lgp-script-custom" style="display:none;">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@0710d88472e32f06129e7d9f6202363350d0893e/blog_pages/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -87,15 +87,14 @@ encapi.sendRequest(api_addr_base,"POST",function(data,cu){
 console.log(data);
 },da,true); //f(url,mtd,cbk,data,sync);
 });
-});
 
 
-window.addEventListener("load",function(){
-var a=[0];
-while(a.length>0){
+
+var a;
+do{
 a=document.getElementsByClassName("ly65lgp-script-custom");
 a[0].parentNode.removeChild(a[0]);
-}
+}while(a.length>0);
 (a=ge("ly65lgp-div-script-loading-tip")).parentNode.removeChild(a);
 ge("ly65lgp-div-token-login").style.display="block";
 });

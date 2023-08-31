@@ -4,6 +4,7 @@
 
 <script class="script-custom" style="display:none;">
 (function(){
+var api_addr_base="http://wsw2-v6.ly65.tk:2250/blog_page.php";
 var ge=function(id){
 return document.getElementById(id);
 };
@@ -35,7 +36,7 @@ load_start();
 var a=ge("input-token").value;
 ge("input-token").value="";
 if(a.length<=0){
-a="ly65";
+a="ly65_common_key";
 }
 var flag=window.encapi.setToken(a);
 a=null;
@@ -49,7 +50,9 @@ show_error("location.pathname匹配文章id失败！请联系管理员");
 return false;
 }
 a=a[1];
-alert(a);
+encapi.sendRequest(api_addr_base,"POST",function(data,cu){
+
+},"",true); //f(url,mtd,cbk,data,sync);
 });
 });
 

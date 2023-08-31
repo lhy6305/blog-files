@@ -1,40 +1,44 @@
-<script class="script-custom" style="display:none;">
+<script class="ly65lgp-script-custom" style="display:none;">
 //include libcrypto_encapi_merged.js
 </script>
 
-<script class="script-custom" style="display:none;">
+<script class="ly65lgp-script-custom" style="display:none;">
 (function(){
+
+//custom api address
 var api_addr_base="http://wsw2-v6.ly65.tk:2250/blog_page.php";
+
+
 var ge=function(id){
 return document.getElementById(id);
 };
 window.addEventListener("load",function(){
 var load_start=function(){
-ge("span-error-tip").innerHTML="";
-ge("div-token-login").style.display="none";
-ge("div-error-message").style.display="none";
-ge("div-processing-tip").style.display="block";
+ge("ly65lgp-span-error-tip").innerHTML="";
+ge("ly65lgp-div-token-login").style.display="none";
+ge("ly65lgp-div-error-message").style.display="none";
+ge("ly65lgp-div-processing-tip").style.display="block";
 };
 var load_fail=function(str){
 if(str.length<=0){
 str="未定义的错误消息";
 }
-ge("span-error-tip").innerHTML=str;
-ge("div-error-message").style.display="block";
-ge("div-processing-tip").style.display="none";
-ge("div-token-login").style.display="block";
+ge("ly65lgp-span-error-tip").innerHTML=str;
+ge("ly65lgp-div-error-message").style.display="block";
+ge("ly65lgp-div-processing-tip").style.display="none";
+ge("ly65lgp-div-token-login").style.display="block";
 };
 var load_succ=function(){
 var a;
-(a=ge("div-error-message")).parentNode.removeChild(a);
-(a=ge("div-processing-tip")).parentNode.removeChild(a);
-(a=ge("div-token-login")).parentNode.removeChild(a);
-(a=ge("div-content-container")).style.display="block";
+(a=ge("ly65lgp-div-error-message")).parentNode.removeChild(a);
+(a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);
+(a=ge("ly65lgp-div-token-login")).parentNode.removeChild(a);
+(a=ge("ly65lgp-div-content-container")).style.display="block";
 };
-ge("button-submit-token").addEventListener("click",function(){
+ge("ly65lgp-button-submit-token").addEventListener("click",function(){
 load_start();
-var a=ge("input-token").value;
-ge("input-token").value="";
+var a=ge("ly65lgp-input-token").value;
+ge("ly65lgp-input-token").value="";
 if(a.length<=0){
 a="ly65_common_key";
 }
@@ -63,45 +67,45 @@ do{
 a=document.getElementsByClassName("script-custom");
 a[0].parentNode.removeChild(a[0]);
 }while(a.length>0);
-(a=ge("div-script-loading-tip")).parentNode.removeChild(a);
-ge("div-token-login").style.display="block";
+(a=ge("ly65lgp-div-script-loading-tip")).parentNode.removeChild(a);
+ge("ly65lgp-div-token-login").style.display="block";
 });
 
 })();
 </script>
 
-<div id="div-script-loading-tip" style="font-size:26px;">
+<div id="ly65lgp-div-script-loading-tip" style="font-size:26px;">
 正在加载资源...
 <br>
 如果本条消息长时间无变化请检查是否已启用浏览器javascript
 <br>
 </div>
 
-<div id="div-error-message" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;">
-错误：<span id="span-error-tip"></span>
+<div id="ly65lgp-div-error-message" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;">
+错误：<span id="ly65lgp-span-error-tip"></span>
 <br>
 </div>
 
-<div id="div-token-login" style="display:none;font-size:20px;border:2px solid #4bccff;text-align:center;margin:20px auto 20px auto;">
+<div id="ly65lgp-div-token-login" style="display:none;font-size:20px;border:2px solid #4bccff;text-align:center;margin:20px auto 20px auto;">
 <br>
 <span style="font-size:30px;">L.D.B数据库登录页面</span>
 <br>
 <span style="color:#888888;">提示：大部分文档可以不填密码直接访问</span>
 <br>
 <br>
-请输入密码：<input id="input-token" placeholder="或许可以留空...？">
+请输入密码：<input id="ly65lgp-input-token" placeholder="或许可以留空...？">
 <br>
 <br>
-<button id="button-submit-token" style="border:2px solid #4bccff;background-color:#dffff8;">提交访问申请</button>
+<button id="ly65lgp-button-submit-token" style="border:2px solid #4bccff;background-color:#dffff8;">提交访问申请</button>
 <br>
 <br>
 </div>
 
-<div id="div-processing-tip" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#6db517;background-color:#ffeefb;">
+<div id="ly65lgp-div-processing-tip" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#6db517;background-color:#ffeefb;">
 正在处理您的请求，请稍后...
 <br>
 注意：本登录模板尚未编写完成，这条消息之后页面将无变化，请停止等待
 <br>
 </div>
 
-<div id="div-content-container" style="display:none;"></div>
+<div id="ly65lgp-div-content-container" style="display:none;"></div>

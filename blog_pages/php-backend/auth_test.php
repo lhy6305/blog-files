@@ -8,8 +8,8 @@ header("Cache-Control: nocache");
 header("Content-Type: application/json");
 header("Pragma: no-cache");
 
-require_once(dirname(__FILE__)."/libutil.php");
-require_once(dirname(__FILE__)."/libauth.php");
+require_once(dirname(__FILE__)."/internal/blog_pages/libutil.php");
+require_once(dirname(__FILE__)."/internal/blog_pages/libauth.php");
 
 if(array_key_exists("synct",$_GET)){
 $dat=[];
@@ -35,7 +35,6 @@ $msg["time"]=$dt[1]["time"];
 $msg["sign"]=$dt[1]["sign"];
 $msg["salt"]=$dt[1]["salt"];
 $msg["version_code"]=$dt[1]["ver"];
-$msg["permission_level"]=$dt[1]["permission_level"];
 $msg["error_type"]=$dt[1]["error_type"];
 $msg["data_dec"]=$dt[1]["data"];
 $msg["aes_key"]=base64_encode($dt[2]);

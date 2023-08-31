@@ -103,12 +103,12 @@ load_fail("JSON.parse失败！请联系管理员");
 return false;
 }
 if(data["code"]!=0){
-load_fail("数据库登录失败！"+data["msg"]);
+load_fail("数据库登录失败！"+data["msg"]+"("+data["code"]+")");
 return false;
 }
 da=encapi.decrypt({"data":data["data"],"k":da[1],"i":da[2]});
 if(da===false){
-load_fail("encapi.ecrypt失败！请联系管理员或更换浏览器环境重试");
+load_fail("encapi.decrypt失败！请联系管理员或更换浏览器环境重试");
 return false;
 }
 ge("ly65lgp-div-content-container").innerHTML=da;

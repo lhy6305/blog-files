@@ -67,7 +67,10 @@ $afi.="-".$afid.".html";
 }
 
 if(!is_readable($afi)){
-show_error_and_exit("request_failed_article_".$dt[1]["aid"]."_not_found",404);
+if($afid<0){
+show_error_and_exit("request_failed_article_".$dt[1]["aid"]."_file_not_found",404);
+}
+show_error_and_exit("request_failed_article_".$dt[1]["aid"]."-".$afid."_file_not_found",404);
 }
 
 $afi=file_get_contents($afi);

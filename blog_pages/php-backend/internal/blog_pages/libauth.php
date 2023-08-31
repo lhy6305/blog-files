@@ -42,7 +42,7 @@ if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512
 return [$ks[$aid][$a],$a];
 }
 }
-show_error_and_exit("request_failed_article_key_not_found",400);
+show_error_and_exit("request_failed_invalid_article_token",401);
 }
 return [$ks[$aid],-1];
 }

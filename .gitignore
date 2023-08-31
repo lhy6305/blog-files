@@ -3,6 +3,8 @@
 Thumbs.db
 Desktop.ini
 
+/blogs
+
 /*.bat
 /*.sh
 /ssh-*

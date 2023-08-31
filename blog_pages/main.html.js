@@ -1,4 +1,12 @@
-<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@8b88b0b6254a141370256069e45b65dd0bdbcc48/blog_pages/libcrypto_encapi_merged.js">
+
+<div id="ly65lgp-div-script-loading-tip" style="font-size:26px;">
+正在加载资源...
+<br>
+如果本条消息长时间无变化请检查是否已启用浏览器javascript
+<br>
+</div>
+
+<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@b27d838c1b2b5b154eb8e52367736e595a80d4da/blog_pages/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -44,6 +52,7 @@ ge("ly65lgp-div-error-message").style.display="none";
 ge("ly65lgp-div-processing-tip").style.display="block";
 };
 var load_fail=function(str){
+encapi.detroyToken();
 if(str.length<=0){
 str="未定义的错误消息";
 }
@@ -53,6 +62,7 @@ ge("ly65lgp-div-processing-tip").style.display="none";
 ge("ly65lgp-div-token-login").style.display="block";
 };
 var load_succ=function(){
+encapi.detroyToken();
 var a;
 (a=ge("ly65lgp-div-error-message")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);
@@ -69,22 +79,32 @@ a="ly65_common_key";
 var flag=window.encapi.setToken(a);
 a=null;
 if(flag==false){
-show_error("encapi.set_token失败！请检查输入是否为合法字符");
+load_fail("encapi.set_token失败！请检查输入是否为合法字符");
 return false;
 }
 a=window.location.pathname.match(new RegExp("/*archives/*([0-9]+)/*"));
 if(a.length!=2){
-show_error("location.pathname匹配文章id失败！请联系管理员");
+load_fail("location.pathname匹配文章id失败！请联系管理员");
 return false;
 }
 var da=encapi.encrypt("");
 if(da===false){
-show_error("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
+load_fail("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
 return false;
 }
 da="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+a[1];
 encapi.sendRequest(api_addr_base,"POST",function(data,cu){
-console.log(data);
+try{
+data=JSON.parse(data);
+}catch(e){
+load_fail("JSON.parse失败！请联系管理员");
+return false;
+}
+if(data["code"]!=0){
+load_fail("数据库登录失败！"+data["msg"]);
+return false;
+}
+//ge("ly65lgp-div-content-container").innerHTML=data;
 },da,true); //f(url,mtd,cbk,data,sync);
 });
 
@@ -101,13 +121,6 @@ ge("ly65lgp-div-token-login").style.display="block";
 
 })();
 </script>
-
-<div id="ly65lgp-div-script-loading-tip" style="font-size:26px;">
-正在加载资源...
-<br>
-如果本条消息长时间无变化请检查是否已启用浏览器javascript
-<br>
-</div>
 
 <div id="ly65lgp-div-error-message" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;">
 错误：<span id="ly65lgp-span-error-tip"></span>

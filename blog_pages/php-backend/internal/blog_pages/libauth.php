@@ -25,7 +25,7 @@ $p--;
 return $d;
 }
 
-function get_key_by_aid($aid){
+function get_key_by_aid($aid,$dt){
 $ks=dirname(__FILE__)."/0_blog_page_pwd.json";
 if(!is_readable($ks)){
 show_error_and_exit("request_failed_keystore_not_found",500);
@@ -35,13 +35,18 @@ $ks=json_decode($ks,true);
 if($ks===null){
 show_error_and_exit("request_failed_invalid_keystore_data",500);
 }
-if($aid=="debug_key"){
-return "ly65_common_key";
-}
 if(array_key_exists($aid,$ks)){
-return $ks[$aid];
+if(is_array($ks[$aid])){
+for($a=0;$a<count($ks[$aid]);$a++){
+if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$ks[$aid][$a].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
+return [$ks[$aid][$a],$a];
+}
 }
 show_error_and_exit("request_failed_article_key_not_found",400);
+}
+return [$ks[$aid],-1];
+}
+return ["ly65_common_key",-1];
 }
 
 function checkauth($dt){
@@ -101,7 +106,9 @@ md5(time)
 */
 
 $t=$dt["time"];
-$k=get_key_by_aid($dt["aid"]);
+$k=get_key_by_aid($dt["aid"],$dt);
+$dt["afid"]=$k[1];
+$k=$k[0];
 $s=$dt["salt"];
 
 $psi=substr(md5(hex2bin(hash("sha256",$s.$t.hex2bin(hash("sha512",$s.$k.$s)).$t))),0,6);
@@ -115,7 +122,7 @@ $dt["error_type"][]="param[\"sign\"] is not valid";
 }
 
 if($error_flag==true){
-return [$error_flag,$dt,null,null];
+return [$error_flag,$dt,null,null,-1];
 }
 unset($psi);
 unset($sig);
@@ -171,6 +178,6 @@ usleep(random_int(0,1000)*1000);
 }
 return $dt;
 
-//[$error_flag,[time,salt,[dec]data,error_type],$key,$i];
+//[$error_flag,[time,salt,[dec]data,error_type,afid],$key,$i];
 }
 

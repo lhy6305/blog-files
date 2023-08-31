@@ -30,12 +30,14 @@ if($dt[0]){
 show_error_and_exit("request_failed_permission_denied: ".json_encode($dt[1]["error_type"]),401);
 }
 
+/*
 $msg=[];
 $msg["on_error"]=$dt[0];
 $msg["time"]=$dt[1]["time"];
 $msg["sign"]=$dt[1]["sign"];
 $msg["salt"]=$dt[1]["salt"];
 $msg["article_id"]=$dt[1]["aid"];
+$msg["article_file_id"]=$dt[1]["afid"];
 $msg["error_type"]=$dt[1]["error_type"];
 $msg["data_dec"]=$dt[1]["data"];
 $msg["aes_key"]=base64_encode($dt[2]);
@@ -48,6 +50,36 @@ $dat=[];
 $dat["code"]=0;
 $dat["msg"]="success";
 $dat["data"]=$msg;
+$dat=json_encode($dat,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
+header("Content-Length: ".strlen($dat));
+echo $dat;
+*/
+
+$article_root_pth=dirname(__FILE__)."/internal/blog_pages/";
+
+$afi=$article_root_pth.$dt[1]["aid"];
+$afid=$dt[1]["afid"];
+
+if($afid<0){
+$afi.=".html";
+}else{
+$afi.="-".$afid.".html";
+}
+
+if(!is_readable($afi)){
+show_error_and_exit("request_failed_article_".$dt[1]["aid"]."_not_found",404);
+}
+
+$afi=file_get_contents($afi);
+
+$afi=custom_pad($afi);
+$afi=openssl_encrypt($afi,"aes-256-cbc",$dt[2],OPENSSL_ZERO_PADDING,$dt[3]);
+
+$dat=[];
+$dat["code"]=0;
+$dat["msg"]="success";
+$dat["data"]=$afi;
+
 $dat=json_encode($dat,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 header("Content-Length: ".strlen($dat));
 echo $dat;

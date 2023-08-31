@@ -12,7 +12,20 @@ var api_addr_base="http://wsw2-v6.ly65.tk:2250/blog_page.php";
 var ge=function(id){
 return document.getElementById(id);
 };
+var syt=function(){
+var st=encapi.gt(0x00);
+encapi.sendRequest(api_addr_base+"?synct="+Number(st),"GET",(function(dt,cu){
+if(dt===false){
+encapi.log("sync time failed");
+return false;
+}
+dt=Number(dt);
+encapi.time_delta=dt;
+encapi.log("sync time succ, delta="+dt);
+}),null,true);
+};
 window.addEventListener("load",function(){
+syt();
 var load_start=function(){
 ge("ly65lgp-span-error-tip").innerHTML="";
 ge("ly65lgp-div-token-login").style.display="none";
@@ -53,10 +66,15 @@ if(a.length!=2){
 show_error("location.pathname匹配文章id失败！请联系管理员");
 return false;
 }
-a=a[1];
+var da=encapi.encrypt("");
+if(da===false){
+show_error("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
+return false;
+}
+da="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+a[1];
 encapi.sendRequest(api_addr_base,"POST",function(data,cu){
-
-},"",true); //f(url,mtd,cbk,data,sync);
+console.log(data);
+},da,true); //f(url,mtd,cbk,data,sync);
 });
 });
 

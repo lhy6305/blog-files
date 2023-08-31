@@ -41,6 +41,8 @@ return false;
 }
 };
 
+encapi.gt=gt;
+
 encapi.log=function(){
 var a=["[encapi]"];
 for(var b=0;b<arguments.length;b++){

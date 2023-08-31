@@ -4,6 +4,7 @@ set_time_limit(0);
 ob_implicit_flush();
 ignore_user_abort(true);
 date_default_timezone_set("Asia/Shanghai");
+//header("Access-Control-Allow-Origin: *");
 header("Cache-Control: nocache");
 header("Content-Type: application/json");
 header("Pragma: no-cache");

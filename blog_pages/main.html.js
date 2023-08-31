@@ -19,7 +19,18 @@ if(dt===false){
 encapi.log("sync time failed");
 return false;
 }
+try{
+dt=JSON.parse(dt);
+}catch(e){
+encapi.log("sync time failed");
+return false;
+}
+dt=dt["data"];
 dt=Number(dt);
+if(isNaN(dt)){
+encapi.log("sync time failed");
+return false;
+}
 encapi.time_delta=dt;
 encapi.log("sync time succ, delta="+dt);
 }),null,true);

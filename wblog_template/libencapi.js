@@ -178,7 +178,7 @@ cu=new XMLHttpRequest();
 try{
 cu=new ActiveXObject("Microsoft.XMLHTTP");
 }catch(e2){
-window.alert("您的浏览器不支持XHR，无法发送请求到服务器");
+encapi.log("XHR object construct failed");
 return false;
 }
 }

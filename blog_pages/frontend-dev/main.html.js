@@ -1,4 +1,9 @@
 
+<div id="ly65lgp-div-permission-tip" style="display:none;font-size:18px;border:2px double #43b269;margin:20px auto 20px auto;color:#8e5100;background-color:#f9e69c2e;">
+//这里插入权限分级
+<br>
+</div>
+
 <div id="ly65lgp-div-script-loading-tip" style="font-size:26px;">
 正在加载资源...
 <br>
@@ -6,7 +11,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@9977e9e39e467967c7c9fe33c94f0a536fd4cda8/blog_pages/libcrypto_encapi_merged.js">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -43,8 +48,10 @@ encapi.time_delta=dt;
 encapi.log("sync time succ, delta="+dt);
 }),null,true);
 };
+
 window.addEventListener("load",function(){
 syt();
+ge("ly65lgp-div-permission-tip").style.display="block";
 var load_start=function(){
 ge("ly65lgp-span-error-tip").innerHTML="";
 ge("ly65lgp-div-token-login").style.display="none";
@@ -64,6 +71,7 @@ ge("ly65lgp-div-token-login").style.display="block";
 var load_succ=function(){
 encapi.destroyToken();
 var a;
+(a=ge("ly65lgp-div-permission-tip")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-error-message")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-token-login")).parentNode.removeChild(a);

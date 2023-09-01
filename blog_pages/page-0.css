@@ -1,0 +1,19 @@
+pre{
+padding:0 !important;
+margin:0 !important;
+overflow:unset !important;
+background:unset !important;
+border:unset !important;
+border-radius:unset !important;
+}
+.nearly-invisible{
+color:#aaaaaa;
+opacity:0.5;
+background-color:#ffffff00;
+transition:all ease-out 0.1s;
+}
+.nearly-invisible:hover{
+color:#9e00b4;
+background-color:#bef93e4d;
+opacity:1;
+}

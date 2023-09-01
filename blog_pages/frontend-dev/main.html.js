@@ -19,7 +19,7 @@
 (function(){
 
 //custom api address
-var api_addr_base="http://wsw2-v6.ly65.tk:2250/blog_page.php";
+var api_addr_base=window.api_addr_base||"http://wsw2-v6.ly65.tk:2250/blog_page.php";
 
 
 var ge=function(id){

@@ -3,7 +3,10 @@
 require_once(__DIR__."/libutil.php");
 
 function ly65_custom_hook__read_template($id){
-$id=__DIR__."/template/".$id.".html";
+if(strpos($id,".")===false){
+$id.=".html";
+}
+$id=__DIR__."/template/".$id;
 if(!is_readable($id)){
 return -1;
 }
@@ -13,6 +16,23 @@ if(filesize($id)!==strlen($fi)){
 return -2;
 }
 unset($id);
+
+$l=0;
+do{
+$l=strlen($fi);
+$fi=str_replace("\r\n","\n",$fi);
+}while($l!=strlen($fi));
+unset($l);
+
+$l=0;
+do{
+$l=strlen($fi);
+$fi=str_replace("\r","\n",$fi);
+}while($l!=strlen($fi));
+unset($l);
+
+$fi=explode("\n",$fi);
+$fi=implode("\r\n",$fi);
 return $fi;
 }
 
@@ -72,9 +92,8 @@ $str=explode("\n",$str);
 //match template sign
 
 for($a=0;$a<count($str);$a++){
-if(!str_starts_with("#template|",$str[$a])){
-continue;
-}
+
+if(str_starts_with("#template|",$str[$a])){
 $b=explode("|",$str[$a]);
 if(count($b)<2){
 continue;
@@ -85,25 +104,36 @@ continue;
 array_shift($b);
 $tf=$b[0];
 array_shift($b);
-$tf=ly65_custom_hook__read_template($tf);
+$tf_1=ly65_custom_hook__read_template($tf);
 
-if($tf===-1){
-$tf="<span style=\"font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;\">[lib_ly65_custom_plugin] [WARN] template file not found!!</span>";
+if($tf_1===-1){
+$tf="<span style=\"font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;\">[lib_ly65_custom_plugin] [WARN] template file ".$tf." not found!!</span>";
 $str[$a]=$tf;
 continue;
-}else if($tf===-2){
-$tf="<span style=\"font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;\">[lib_ly65_custom_plugin] [WARN] template file short read!!</span>";
+}else if($tf_1===-2){
+$tf="<span style=\"font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;\">[lib_ly65_custom_plugin] [WARN] template file ".$tf." short read!!</span>";
 $str[$a]=$tf;
 continue;
 }
 
-$tf=ly65_custom_hook__replace_anchor($tf,$b);
+$tf=$tf_1;
+unset($tf_1);
 
+$tf=ly65_custom_hook__replace_anchor($tf,$b);
 $str[$a]=$tf;
 continue;
+}
+
+if(str_starts_with("#comment|",$str[$a])){
+array_splice($str,$a,1);
+$a--;
+continue;
+}
+
 }
 unset($a);
 unset($b);
+unset($tf);
 
 //#template|ly65_LEG|文档权限分级 1 (perm_intl)<br>您尚未获取perm_intl级权限，请在下面验证身份
 

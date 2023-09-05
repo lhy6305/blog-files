@@ -42,7 +42,7 @@ if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512
 return [$ks[$aid][$a],$a];
 }
 }
-show_error_and_exit("request_failed_invalid_article_token",401);
+return [false,-1];
 }
 return [$ks[$aid],-1];
 }
@@ -110,6 +110,12 @@ $k=get_key_by_aid($dt["aid"],$dt);
 $dt["afid"]=$k[1];
 $k=$k[0];
 $s=$dt["salt"];
+
+if($k===false){
+$error_flag=true;
+$dt["error_type"][]="no valid token matches the param[\"sign\"]";
+return [$error_flag,$dt,null,null,-1];
+}
 
 $psi=substr(md5(hex2bin(hash("sha256",$s.$t.hex2bin(hash("sha512",$s.$k.$s)).$t))),0,6);
 

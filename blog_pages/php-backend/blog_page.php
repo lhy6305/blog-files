@@ -45,11 +45,8 @@ $repeatedString=str_repeat($pad_str,max(0,$repeatTimes)); // safe if used with v
 $before=$padBefore?mb_substr($repeatedString,0,floor($targetLen),$encoding):"";
 $after=$padAfter?mb_substr($repeatedString,0,ceil($targetLen),$encoding):"";
 return $before.$str.$after;
-//end of mb_str_pad
 }
 }
-
-
 
 function custom_pad($d){
 $p=16-(strlen($d)%16);
@@ -91,7 +88,7 @@ if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512
 return [$ks[$aid][$a],$a];
 }
 }
-show_error_and_exit("request_failed_invalid_article_token",401);
+return [false,-1];
 }
 return [$ks[$aid],-1];
 }
@@ -99,7 +96,6 @@ return ["ly65_common_key",-1];
 }
 
 function checkauth($dt){
-//输入校验
 $error_flag=false;
 $dt["error_type"]=[];
 if((!array_key_exists("time",$dt))||strlen($dt["time"])<=0){
@@ -107,12 +103,10 @@ $error_flag=true;
 $dt["error_type"][]="param[\"time\"] required";
 }else{
 $dlt=(float)$dt["time"]-getms();
-
 if($dlt>5*1000||$dlt<-5*1000){
 $error_flag=true;
 $dt["error_type"][]="param[\"time\"] expired";
 }
-
 unset($dlt);
 }
 if((!array_key_exists("data",$dt))||strlen($dt["data"])<=0){
@@ -133,57 +127,33 @@ $dt["error_type"][]="param[\"aid\"] required";
 if($error_flag==true){
 return [$error_flag,$dt,null,null];
 }
-
-/*
-salt生成算法（反正就是随机的128位）
-md5(sha256(time+randomBytes(16)+time))
-
-sign生成算法
-md5(sha256(salt+time+keyhash+time))
-取前3字节转成hex(strlen==6)
-校验sign忽略大小写
-
-加密data的key生成算法
-sha256(time+keyhash+salt+time)
-
-其中 keyhash=sha512(salt+api_key+salt) 预先计算
-
-加密data的iv生成算法
-md5(time)
-
-注意hash的输入（key salt time）是小写hex字符串（salt）或utf8字符串（key time），但hash输出是二进制字符串
-*/
-
 $t=$dt["time"];
 $k=get_key_by_aid($dt["aid"],$dt);
 $dt["afid"]=$k[1];
 $k=$k[0];
 $s=$dt["salt"];
-
+if($k===false){
+$error_flag=true;
+$dt["error_type"][]="no valid token matches the param[\"sign\"]";
+return [$error_flag,$dt,null,null,-1];
+}
 $psi=substr(md5(hex2bin(hash("sha256",$s.$t.hex2bin(hash("sha512",$s.$k.$s)).$t))),0,6);
-
 $psi=strtolower($psi);
 $sig=strtolower($dt["sign"]);
-
 if(strlen(preg_replace("#[0-9a-f]*#","",$sig))!==0||$psi!==$sig){
 $error_flag=true;
 $dt["error_type"][]="param[\"sign\"] is not valid";
 }
-
 if($error_flag==true){
 return [$error_flag,$dt,null,null,-1];
 }
 unset($psi);
 unset($sig);
-
 $key=hex2bin(hash("sha256",$t.hex2bin(hash("sha512",$s.$k.$s)).$s.$t));
-
 $i=hex2bin(md5($t));
 $d=$dt["data"];
-
 $d=openssl_decrypt($d,"aes-256-cbc",$key,OPENSSL_ZERO_PADDING,$i);
 $d=custom_unpad($d);
-
 $dt["data"]=$d;
 unset($d);
 unset($t);
@@ -191,7 +161,6 @@ unset($k);
 unset($s);
 return [$error_flag,$dt,$key,$i];
 }
-
 
 function get_authed_data($is_debug=false){
 $pb=file_get_contents("php://input");
@@ -214,9 +183,6 @@ $dt[$a[0]]=$a[1];
 }
 }
 unset($pb);
-
-//$dt:time,salt,[enc]data
-
 $dt=checkauth($dt);
 if(!$is_debug){
 if($dt[0]){
@@ -226,12 +192,7 @@ usleep(random_int(0,1000)*1000);
 }
 }
 return $dt;
-
-//[$error_flag,[time,salt,[dec]data,error_type,afid],$key,$i];
 }
-
-
-
 if(array_key_exists("synct",$_GET)){
 $dat=[];
 $dat["code"]=0;
@@ -242,68 +203,31 @@ header("Content-Length: ".strlen($dat));
 echo $dat;
 exit;
 }
-
-//$dt=get_authed_data(true);
 $dt=get_authed_data();
-//[$error_flag,[time,salt,[dec]data,error_type],$key,$i];
-
 if($dt[0]){
 show_error_and_exit("request_failed_permission_denied: ".json_encode($dt[1]["error_type"]),401);
 }
-
-/*
-$msg=[];
-$msg["on_error"]=$dt[0];
-$msg["time"]=$dt[1]["time"];
-$msg["sign"]=$dt[1]["sign"];
-$msg["salt"]=$dt[1]["salt"];
-$msg["article_id"]=$dt[1]["aid"];
-$msg["article_file_id"]=$dt[1]["afid"];
-$msg["error_type"]=$dt[1]["error_type"];
-$msg["data_dec"]=$dt[1]["data"];
-$msg["aes_key"]=base64_encode($dt[2]);
-$msg["aes_iv"]=base64_encode($dt[3]);
-
-$msg["data_enc"]=custom_pad($dt[1]["data"]);
-$msg["data_enc"]=openssl_encrypt($msg["data_enc"],"aes-256-cbc",$dt[2],OPENSSL_ZERO_PADDING,$dt[3]);
-
-$dat=[];
-$dat["code"]=0;
-$dat["msg"]="success";
-$dat["data"]=$msg;
-$dat=json_encode($dat,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
-header("Content-Length: ".strlen($dat));
-echo $dat;
-*/
-
 $article_root_pth=dirname(__FILE__)."/internal/blog_pages/";
-
 $afi=$article_root_pth.$dt[1]["aid"];
 $afid=$dt[1]["afid"];
-
 if($afid<0){
 $afi.=".html";
 }else{
 $afi.="-".$afid.".html";
 }
-
 if(!is_readable($afi)){
 if($afid<0){
 show_error_and_exit("request_failed_article_".$dt[1]["aid"]."_file_not_found",404);
 }
 show_error_and_exit("request_failed_article_".$dt[1]["aid"]."-".$afid."_file_not_found",404);
 }
-
 $afi=file_get_contents($afi);
-
 $afi=custom_pad($afi);
 $afi=openssl_encrypt($afi,"aes-256-cbc",$dt[2],OPENSSL_ZERO_PADDING,$dt[3]);
-
 $dat=[];
 $dat["code"]=0;
 $dat["msg"]="success";
 $dat["data"]=$afi;
-
 $dat=json_encode($dat,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT);
 header("Content-Length: ".strlen($dat));
 echo $dat;

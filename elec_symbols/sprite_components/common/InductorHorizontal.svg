@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="40" height="40" transform="scale(25.6)"><style type="text/css">
+path, polyline, polygon {stroke-linejoin:round;}
+rect, circle, ellipse, polyline, line, polygon, path {shape-rendering:crispEdges;}
+</style>
+<rect x="0" y="0" width="1" height="1" fill="none" stroke="none"/>
+<rect x="0" y="39" width="1" height="1" fill="none" stroke="none"/>
+<rect x="39" y="0" width="1" height="1" fill="none" stroke="none"/>
+<rect x="39" y="39" width="1" height="1" fill="none" stroke="none"/>
+
+<g xmlns="http://www.w3.org/2000/svg" id="g1" c_spiceCmd="null" c_para="Prefix Start`1`" importFlag="0" c_portOfADImportHack="" c_transformList=""><path d="M 0 20 C 5 5 15 5 20 20 C 25 5 35 5 40 20" id="gge3152" locked="0" c_etype="" c_shapetype="line" stroke="#000000" stroke-width="2"  fill="none" /></g></svg>

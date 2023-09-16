@@ -1,0 +1,113 @@
+0x100000 NotDef
+
+0x100001 EmptyBlock
+
+0x100100 StraightWireHorizontal
+0x100101 StraightWireVertical
+
+0x100200 RightAngleWire0
+0x100201 RightAngleWire1
+0x100202 RightAngleWire2
+0x100203 RightAngleWire3
+
+0x100300 TeeWire0
+0x100301 TeeWire1
+0x100302 TeeWire2
+0x100303 TeeWire3
+
+0x100400 CrossWire
+
+0x100500 CrossNCWire
+
+
+
+
+0x101100 GNDTop
+0x101110 GNDBottom
+0x101120 GNDLeft
+0x101130 GNDRight
+
+0x101200 SourceCoreHorizontal
+0x101201 SourceCoreVertical
+
+0x101300 DependentSourceCoreHorizontal
+0x101301 DependentSourceCoreVertical
+
+
+
+
+0x102000 ResistorHorizontal0
+0x102001 ResistorHorizontal1
+0x102010 ResistorVertical0
+0x102011 ResistorVertical1
+
+0x102100 CapacitorHorizontal
+0x102101 CapacitorVertical
+
+0x102200 InductorHorizontal
+0x102201 InductorVertical
+
+0x102300 DiodeTop
+0x102301 DiodeBottom
+0x102302 DiodeLeft
+0x102303 DiodeRight
+
+
+
+
+0x10F000 SolidNode
+0x10F001 HollowNode
+
+0x10F100 HalfWire0
+0x10F101 HalfWire1
+0x10F102 HalfWire2
+0x10F103 HalfWire3
+0x10F104 HalfWire4
+0x10F105 HalfWire5
+0x10F106 HalfWire6
+0x10F107 HalfWire7
+
+0x10F200 OuterOutwardArrow0
+0x10F201 OuterOutwardArrow1
+0x10F202 OuterOutwardArrow2
+0x10F203 OuterOutwardArrow3
+0x10F204 OuterOutwardArrow4
+0x10F205 OuterOutwardArrow5
+0x10F206 OuterOutwardArrow6
+0x10F207 OuterOutwardArrow7
+
+0x10F300 OuterInwardArrow0
+0x10F301 OuterInwardArrow1
+0x10F302 OuterInwardArrow2
+0x10F303 OuterInwardArrow3
+0x10F304 OuterInwardArrow4
+0x10F305 OuterInwardArrow5
+0x10F306 OuterInwardArrow6
+0x10F307 OuterInwardArrow7
+
+0x10F400 InnerOutwardArrow0
+0x10F401 InnerOutwardArrow1
+0x10F402 InnerOutwardArrow2
+0x10F403 InnerOutwardArrow3
+0x10F404 InnerOutwardArrow4
+0x10F405 InnerOutwardArrow5
+0x10F406 InnerOutwardArrow6
+0x10F407 InnerOutwardArrow7
+
+0x10F500 InnerInwardArrow0
+0x10F501 InnerInwardArrow1
+0x10F502 InnerInwardArrow2
+0x10F503 InnerInwardArrow3
+0x10F504 InnerInwardArrow4
+0x10F505 InnerInwardArrow5
+0x10F506 InnerInwardArrow6
+0x10F507 InnerInwardArrow7
+
+0x10F600 HalfWireFrame0
+0x10F601 HalfWireFrame1
+0x10F602 HalfWireFrame2
+0x10F603 HalfWireFrame3
+0x10F604 HalfWireFrame4
+0x10F605 HalfWireFrame5
+0x10F606 HalfWireFrame6
+0x10F607 HalfWireFrame7

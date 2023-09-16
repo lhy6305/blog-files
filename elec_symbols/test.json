@@ -1,0 +1,576 @@
+{
+  "props": {
+    "ascent": 1024,
+    "descent": 0,
+    "em": 1024,
+    "family": "elec_symbols",
+    "fullname": "elec_symbols",
+    "copyright": "Made by ly65. Educational purposes only. All Rights Reserved",
+    "version": "1.0",
+    "os2_vendor": "LY65",
+    "encoding": "UnicodeFull"
+  },
+  "input": "J:\\proj_dev\\整活记录\\qbot整活\\ldb-blog_archive\\elec_symbols\\sprite_components",
+  "output": [
+    "J:\\proj_dev\\整活记录\\qbot整活\\ldb-blog_archive\\elec_symbols\\elec_symbols.ttf",
+    "J:\\proj_dev\\整活记录\\qbot整活\\ldb-blog_archive\\elec_symbols\\elec_symbols.otf",
+    "J:\\proj_dev\\整活记录\\qbot整活\\ldb-blog_archive\\elec_symbols\\elec_symbols.woff",
+    "J:\\proj_dev\\整活记录\\qbot整活\\ldb-blog_archive\\elec_symbols\\elec_symbols.woff2"
+  ],
+  "glyphs": {
+
+
+    "0x100000": {
+      "src": "NotDef.svg",
+      "glyphname": "NotDef",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100001": {
+      "src": "EmptyBlock.svg",
+      "glyphname": "EmptyBlock",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100100": {
+      "src": "wire/StraightWireHorizontal.svg",
+      "glyphname": "StraightWireHorizontal",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100101": {
+      "src": "wire/StraightWireVertical.svg",
+      "glyphname": "StraightWireVertical",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100200": {
+      "src": "wire/RightAngleWire0.svg",
+      "glyphname": "RightAngleWire0",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100201": {
+      "src": "wire/RightAngleWire1.svg",
+      "glyphname": "RightAngleWire1",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100202": {
+      "src": "wire/RightAngleWire2.svg",
+      "glyphname": "RightAngleWire2",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100203": {
+      "src": "wire/RightAngleWire3.svg",
+      "glyphname": "RightAngleWire3",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100300": {
+      "src": "wire/TeeWire0.svg",
+      "glyphname": "TeeWire0",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100301": {
+      "src": "wire/TeeWire1.svg",
+      "glyphname": "TeeWire1",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100302": {
+      "src": "wire/TeeWire2.svg",
+      "glyphname": "TeeWire2",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x100303": {
+      "src": "wire/TeeWire3.svg",
+      "glyphname": "TeeWire3",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100400": {
+      "src": "wire/CrossWire.svg",
+      "glyphname": "CrossWire",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x100500": {
+      "src": "wire/CrossNCWire.svg",
+      "glyphname": "CrossNCWire",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+
+
+    "0x101100": {
+      "src": "source/GNDTop.svg",
+      "glyphname": "GNDTop",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x101110": {
+      "src": "source/GNDBottom.svg",
+      "glyphname": "GNDBottom",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x101120": {
+      "src": "source/GNDLeft.svg",
+      "glyphname": "GNDLeft",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x101130": {
+      "src": "source/GNDRight.svg",
+      "glyphname": "GNDRight",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x101200": {
+      "src": "source/SourceCoreHorizontal.svg",
+      "glyphname": "SourceCoreHorizontal",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x101201": {
+      "src": "source/SourceCoreVertical.svg",
+      "glyphname": "SourceCoreVertical",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x101300": {
+      "src": "source/DependentSourceCoreHorizontal.svg",
+      "glyphname": "DependentSourceCoreHorizontal",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x101301": {
+      "src": "source/DependentSourceCoreVertical.svg",
+      "glyphname": "DependentSourceCoreVertical",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+
+
+    "0x102000": {
+      "src": "common/ResistorHorizontal0.svg",
+      "glyphname": "ResistorHorizontal0",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102001": {
+      "src": "common/ResistorHorizontal1.svg",
+      "glyphname": "ResistorHorizontal1",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102010": {
+      "src": "common/ResistorVertical0.svg",
+      "glyphname": "ResistorVertical0",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102011": {
+      "src": "common/ResistorVertical1.svg",
+      "glyphname": "ResistorVertical1",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x102100": {
+      "src": "common/CapacitorHorizontal.svg",
+      "glyphname": "CapacitorHorizontal",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102101": {
+      "src": "common/CapacitorVertical.svg",
+      "glyphname": "CapacitorVertical",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x102200": {
+      "src": "common/InductorHorizontal.svg",
+      "glyphname": "InductorHorizontal",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102201": {
+      "src": "common/InductorVertical.svg",
+      "glyphname": "InductorVertical",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+    "0x102300": {
+      "src": "common/DiodeTop.svg",
+      "glyphname": "DiodeTop",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102301": {
+      "src": "common/DiodeBottom.svg",
+      "glyphname": "DiodeBottom",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102302": {
+      "src": "common/DiodeLeft.svg",
+      "glyphname": "DiodeLeft",
+      "vwidth": 1024,
+      "width": 1024
+    },
+    "0x102303": {
+      "src": "common/DiodeRight.svg",
+      "glyphname": "DiodeRight",
+      "vwidth": 1024,
+      "width": 1024
+    },
+
+
+
+
+    "0x10F000": {
+      "src": "elem_0width/SolidNode.svg",
+      "glyphname": "SolidNode",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F001": {
+      "src": "elem_0width/HollowNode.svg",
+      "glyphname": "HollowNode",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F100": {
+      "src": "elem_0width/HalfWire0.svg",
+      "glyphname": "HalfWire0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F101": {
+      "src": "elem_0width/HalfWire1.svg",
+      "glyphname": "HalfWire1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F102": {
+      "src": "elem_0width/HalfWire2.svg",
+      "glyphname": "HalfWire2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F103": {
+      "src": "elem_0width/HalfWire3.svg",
+      "glyphname": "HalfWire3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F104": {
+      "src": "elem_0width/HalfWire4.svg",
+      "glyphname": "HalfWire4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F105": {
+      "src": "elem_0width/HalfWire5.svg",
+      "glyphname": "HalfWire5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F106": {
+      "src": "elem_0width/HalfWire6.svg",
+      "glyphname": "HalfWire6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F107": {
+      "src": "elem_0width/HalfWire7.svg",
+      "glyphname": "HalfWire7",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F200": {
+      "src": "elem_0width/OuterOutwardArrow0.svg",
+      "glyphname": "OuterOutwardArrow0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F201": {
+      "src": "elem_0width/OuterOutwardArrow1.svg",
+      "glyphname": "OuterOutwardArrow1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F202": {
+      "src": "elem_0width/OuterOutwardArrow2.svg",
+      "glyphname": "OuterOutwardArrow2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F203": {
+      "src": "elem_0width/OuterOutwardArrow3.svg",
+      "glyphname": "OuterOutwardArrow3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F204": {
+      "src": "elem_0width/OuterOutwardArrow4.svg",
+      "glyphname": "OuterOutwardArrow4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F205": {
+      "src": "elem_0width/OuterOutwardArrow5.svg",
+      "glyphname": "OuterOutwardArrow5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F206": {
+      "src": "elem_0width/OuterOutwardArrow6.svg",
+      "glyphname": "OuterOutwardArrow6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F207": {
+      "src": "elem_0width/OuterOutwardArrow7.svg",
+      "glyphname": "OuterOutwardArrow7",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F300": {
+      "src": "elem_0width/OuterInwardArrow0.svg",
+      "glyphname": "OuterInwardArrow0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F301": {
+      "src": "elem_0width/OuterInwardArrow1.svg",
+      "glyphname": "OuterInwardArrow1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F302": {
+      "src": "elem_0width/OuterInwardArrow2.svg",
+      "glyphname": "OuterInwardArrow2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F303": {
+      "src": "elem_0width/OuterInwardArrow3.svg",
+      "glyphname": "OuterInwardArrow3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F304": {
+      "src": "elem_0width/OuterInwardArrow4.svg",
+      "glyphname": "OuterInwardArrow4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F305": {
+      "src": "elem_0width/OuterInwardArrow5.svg",
+      "glyphname": "OuterInwardArrow5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F306": {
+      "src": "elem_0width/OuterInwardArrow6.svg",
+      "glyphname": "OuterInwardArrow6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F307": {
+      "src": "elem_0width/OuterInwardArrow7.svg",
+      "glyphname": "OuterInwardArrow7",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F400": {
+      "src": "elem_0width/InnerOutwardArrow0.svg",
+      "glyphname": "InnerOutwardArrow0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F401": {
+      "src": "elem_0width/InnerOutwardArrow1.svg",
+      "glyphname": "InnerOutwardArrow1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F402": {
+      "src": "elem_0width/InnerOutwardArrow2.svg",
+      "glyphname": "InnerOutwardArrow2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F403": {
+      "src": "elem_0width/InnerOutwardArrow3.svg",
+      "glyphname": "InnerOutwardArrow3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F404": {
+      "src": "elem_0width/InnerOutwardArrow4.svg",
+      "glyphname": "InnerOutwardArrow4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F405": {
+      "src": "elem_0width/InnerOutwardArrow5.svg",
+      "glyphname": "InnerOutwardArrow5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F406": {
+      "src": "elem_0width/InnerOutwardArrow6.svg",
+      "glyphname": "InnerOutwardArrow6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F407": {
+      "src": "elem_0width/InnerOutwardArrow7.svg",
+      "glyphname": "InnerOutwardArrow7",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F500": {
+      "src": "elem_0width/InnerInwardArrow0.svg",
+      "glyphname": "InnerInwardArrow0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F501": {
+      "src": "elem_0width/InnerInwardArrow1.svg",
+      "glyphname": "InnerInwardArrow1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F502": {
+      "src": "elem_0width/InnerInwardArrow2.svg",
+      "glyphname": "InnerInwardArrow2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F503": {
+      "src": "elem_0width/InnerInwardArrow3.svg",
+      "glyphname": "InnerInwardArrow3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F504": {
+      "src": "elem_0width/InnerInwardArrow4.svg",
+      "glyphname": "InnerInwardArrow4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F505": {
+      "src": "elem_0width/InnerInwardArrow5.svg",
+      "glyphname": "InnerInwardArrow5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F506": {
+      "src": "elem_0width/InnerInwardArrow6.svg",
+      "glyphname": "InnerInwardArrow6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F507": {
+      "src": "elem_0width/InnerInwardArrow7.svg",
+      "glyphname": "InnerInwardArrow7",
+      "vwidth": 1024,
+      "width": 0
+    },
+
+
+    "0x10F600": {
+      "src": "elem_0width/HalfWireFrame0.svg",
+      "glyphname": "HalfWireFrame0",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F601": {
+      "src": "elem_0width/HalfWireFrame1.svg",
+      "glyphname": "HalfWireFrame1",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F602": {
+      "src": "elem_0width/HalfWireFrame2.svg",
+      "glyphname": "HalfWireFrame2",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F603": {
+      "src": "elem_0width/HalfWireFrame3.svg",
+      "glyphname": "HalfWireFrame3",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F604": {
+      "src": "elem_0width/HalfWireFrame4.svg",
+      "glyphname": "HalfWireFrame4",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F605": {
+      "src": "elem_0width/HalfWireFrame5.svg",
+      "glyphname": "HalfWireFrame5",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F606": {
+      "src": "elem_0width/HalfWireFrame6.svg",
+      "glyphname": "HalfWireFrame6",
+      "vwidth": 1024,
+      "width": 0
+    },
+    "0x10F607": {
+      "src": "elem_0width/HalfWireFrame7.svg",
+      "glyphname": "HalfWireFrame7",
+      "vwidth": 1024,
+      "width": 0
+    }
+
+
+  }
+}

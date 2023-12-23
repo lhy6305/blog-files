@@ -93,7 +93,7 @@ $str=explode("\n",$str);
 
 for($a=0;$a<count($str);$a++){
 
-if(str_starts_with("#template|",$str[$a])){
+if(str_starts_with($str[$a],"#template|")){
 $b=explode("|",$str[$a]);
 if(count($b)<2){
 continue;
@@ -124,7 +124,7 @@ $str[$a]=$tf;
 continue;
 }
 
-if(str_starts_with("#comment|",$str[$a])){
+if(str_starts_with($str[$a],"#comment|")){
 array_splice($str,$a,1);
 $a--;
 continue;

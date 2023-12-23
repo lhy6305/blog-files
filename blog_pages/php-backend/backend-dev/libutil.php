@@ -19,7 +19,20 @@ exit;
 
 if(!function_exists("str_starts_with")){
 function str_starts_with($haystack,$needle){
-return (string)$needle!==""&&strncmp($haystack,$needle,strlen($needle))===0;
+if(!is_string($needle)||!is_string($haystack)){
+return false;
+}
+if(strlen($needle)<=0){
+return true;
+}
+if(strlen($needle)>strlen($haystack)){
+return false;
+}
+if(strncmp($needle,$haystack,strlen($needle))==0){
+return true;
+}
+return false;
+//end of str_starts_with
 }
 }
 

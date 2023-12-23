@@ -1,7 +1,7 @@
 <?php
 
 if(!function_exists("str_starts_with")){
-function str_starts_with($needle,$haystack){
+function str_starts_with($haystack,$needle){
 if(!is_string($needle)||!is_string($haystack)){
 return false;
 }

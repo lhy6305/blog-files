@@ -27,7 +27,7 @@ exit;
 }
 
 if(!function_exists("str_starts_with")){
-function str_starts_with($haystack,$needle){
+function str_starts_with($needle,$haystack){
 return (string)$needle!==""&&strncmp($haystack,$needle,strlen($needle))===0;
 }
 }

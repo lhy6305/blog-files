@@ -1,7 +1,7 @@
 <?php
 
 
-namespace TypechoPlugin\ly65_custom_plugin;
+//namespace TypechoPlugin\ly65_custom_plugin;
 
 require_once(__DIR__."/lib_ly65_custom_plugin.php");
 
@@ -13,11 +13,11 @@ require_once(__DIR__."/lib_ly65_custom_plugin.php");
  * @version N/A
  */
 
-class Plugin implements \Typecho\Plugin\PluginInterface {
+class ly65CustomPlugin_Plugin implements Typecho_Plugin_Interface {
 
 public static function activate(){
-\Typecho\Plugin::factory("Widget_Archive")->beforeRender=__CLASS__."::empty_func";
-\Typecho\Plugin::factory("Widget_Archive")->beforeRender="ly65_custom_hook__on_before_render";
+Typecho_Plugin::factory("Widget_Archive")->beforeRender=__CLASS__."::empty_func";
+Typecho_Plugin::factory("Widget_Archive")->beforeRender="ly65_custom_hook__on_before_render";
 }
 
 public static function deactivate(){

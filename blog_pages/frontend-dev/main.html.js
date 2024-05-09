@@ -11,7 +11,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="https://cdn.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://fastly.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -19,7 +19,7 @@
 (function(){
 
 //custom api address
-var api_addr_base=window.api_addr_base||"http://wsw2-v6.ly65.tk:2250/blog_page.php";
+var api_addr_base=window.api_addr_base||(document.location.protocol=="https:"?"https://wsw2-v6.ly65.top:2260/blog_page.php":"http://wsw2-v6.ly65.top:2250/blog_page.php");
 
 
 var ge=function(id){

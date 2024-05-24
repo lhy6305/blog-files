@@ -11,7 +11,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="//sf.ly65.top/static_files/main%4019ffff4e9053567c74feae78cdbcaf58cb3bbc47/libly65encapi.all.min.js" crossorigin="anonymous">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://sf.ly65.top/static_files/main@5a7a6cf9a6a50a8552d4b607c838aa8b2fa8cf70/libly65encapi.all.min.js" crossorigin="anonymous"></script>
 //include libcrypto_encapi_merged.js
 </script>
 

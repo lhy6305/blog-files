@@ -87,6 +87,8 @@ var a;
 (a=ge("ly65lgp-div-processing-tip")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-token-login")).parentNode.removeChild(a);
 (a=ge("ly65lgp-div-content-container")).style.display="block";
+a.id="";
+a.removeAttribute("id");
 delete window.CryptoJS;
 delete window.encapi;
 delete window.libui;

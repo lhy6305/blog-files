@@ -11,7 +11,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="https://fastly.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://fastly.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js" crossorigin="anonymous">
 //include libcrypto_encapi_merged.js
 </script>
 
@@ -21,6 +21,15 @@
 //custom api address
 var api_addr_base=window.api_addr_base||(document.location.protocol=="https:"?"https://wsw2-v6.ly65.top:2260/blog_page.php":"http://wsw2-v6.ly65.top:2250/blog_page.php");
 
+//custom req file id
+var api_req_file_id=window.api_req_file_id||(function(){
+var api_req_file_id=window.location.pathname.match(new RegExp("/*archives/*([0-9]+)/*"));
+if(api_req_file_id.length!=2){
+libui.load_fail("通过location.pathname查询文章id失败！请联系管理员");
+return "";
+}
+return api_req_file_id[1];
+})();
 
 var ge=function(id){
 return document.getElementById(id);
@@ -50,15 +59,17 @@ encapi.log("sync time succ, delta="+dt);
 };
 
 window.addEventListener("load",function(){
+var libui={};
+window.libui=libui;
 syt();
 ge("ly65lgp-div-permission-tip").style.display="block";
-var load_start=function(){
+libui.load_start=function(){
 ge("ly65lgp-span-error-tip").innerHTML="";
 ge("ly65lgp-div-token-login").style.display="none";
 ge("ly65lgp-div-error-message").style.display="none";
 ge("ly65lgp-div-processing-tip").style.display="block";
 };
-var load_fail=function(str){
+libui.load_fail=function(str){
 encapi.destroyToken();
 if(str.length<=0){
 str="未定义的错误消息";
@@ -68,7 +79,7 @@ ge("ly65lgp-div-error-message").style.display="block";
 ge("ly65lgp-div-processing-tip").style.display="none";
 ge("ly65lgp-div-token-login").style.display="block";
 };
-var load_succ=function(){
+libui.load_succ=function(){
 encapi.destroyToken();
 var a;
 (a=ge("ly65lgp-div-permission-tip")).parentNode.removeChild(a);
@@ -78,9 +89,10 @@ var a;
 (a=ge("ly65lgp-div-content-container")).style.display="block";
 delete window.CryptoJS;
 delete window.encapi;
+delete window.libui;
 };
 ge("ly65lgp-button-submit-token").addEventListener("click",function(){
-load_start();
+libui.load_start();
 var a=ge("ly65lgp-input-token").value;
 ge("ly65lgp-input-token").value="";
 if(a.length<=0){
@@ -89,38 +101,33 @@ a="ly65_common_key";
 var flag=window.encapi.setToken(a);
 a=null;
 if(flag==false){
-load_fail("encapi.set_token失败！请检查输入是否为合法字符");
-return false;
-}
-a=window.location.pathname.match(new RegExp("/*archives/*([0-9]+)/*"));
-if(a.length!=2){
-load_fail("location.pathname匹配文章id失败！请联系管理员");
+libui.load_fail("encapi.set_token失败！请检查输入是否为合法字符");
 return false;
 }
 var da=encapi.encrypt("");
 if(da===false){
-load_fail("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
+libui.load_fail("encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
 return false;
 }
-a="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+a[1];
+a="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+api_req_file_id;
 encapi.sendRequest(api_addr_base,"POST",function(data,cu){
 try{
 data=JSON.parse(data);
 }catch(e){
-load_fail("JSON.parse失败！请联系管理员");
+libui.load_fail("JSON.parse失败！请联系管理员");
 return false;
 }
 if(data["code"]!=0){
-load_fail("数据库登录失败！"+data["msg"]+"("+data["code"]+")");
+libui.load_fail("数据库登录失败！"+data["msg"]+"("+data["code"]+")");
 return false;
 }
 da=encapi.decrypt({"data":data["data"],"k":da[1],"i":da[2]});
 if(da===false){
-load_fail("encapi.decrypt失败！请联系管理员或更换浏览器环境重试");
+libui.load_fail("encapi.decrypt失败！请联系管理员或更换浏览器环境重试");
 return false;
 }
 ge("ly65lgp-div-content-container").innerHTML=da;
-load_succ();
+libui.load_succ();
 },a,true); //f(url,mtd,cbk,data,sync);
 });
 

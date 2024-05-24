@@ -11,7 +11,7 @@
 <br>
 </div>
 
-<script class="ly65lgp-script-custom" style="display:none;" src="https://fastly.jsdelivr.net/gh/lhy6305/js-plugins@aed82382aff5f1cbc51b8826f9c9a9767edfb1ff/blog_pages/frontend-dev/libcrypto_encapi_merged.js" crossorigin="anonymous">
+<script class="ly65lgp-script-custom" style="display:none;" src="https://fastly.jsdelivr.net/gh/lhy6305/js-plugins@19ffff4e9053567c74feae78cdbcaf58cb3bbc47/blog_pages/frontend-dev/libcrypto_encapi_merged.js" crossorigin="anonymous">
 //include libcrypto_encapi_merged.js
 </script>
 

@@ -9,8 +9,8 @@ header("Cache-Control: nocache");
 header("Content-Type: application/json");
 header("Pragma: no-cache");
 
-require_once(dirname(__FILE__)."/libutil.php");
-require_once(dirname(__FILE__)."/libauth.php");
+require_once(__DIR__."/libutil.php");
+require_once(__DIR__."/libauth.php");
 
 if(array_key_exists("synct",$_GET)){
 $dat=[];
@@ -55,22 +55,19 @@ header("Content-Length: ".strlen($dat));
 echo $dat;
 */
 
-$article_root_pth=dirname(__FILE__)."/internal/blog_pages/";
+$article_root_pth=__DIR__."/internal/blog_pages/";
 
 $afi=$article_root_pth.$dt[1]["aid"];
 $afid=$dt[1]["afid"];
 
-if($afid<0){
+if($afid===false){
 $afi.=".html";
 }else{
-$afi.="-".$afid.".html";
+$afi=$afid.".html";
 }
 
 if(!is_readable($afi)){
-if($afid<0){
-show_error_and_exit("request_failed_article_".$dt[1]["aid"]."_file_not_found",404);
-}
-show_error_and_exit("request_failed_article_".$dt[1]["aid"]."-".$afid."_file_not_found",404);
+show_error_and_exit("request_failed_article_file_not_found: ".$afi,404);
 }
 
 $afi=file_get_contents($afi);

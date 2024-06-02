@@ -1,7 +1,5 @@
 <?php
 
-require_once(dirname(__FILE__)."/libutil.php");
-
 function custom_pad($d){
 $p=16-(strlen($d)%16);
 if($p==0){
@@ -26,7 +24,7 @@ return $d;
 }
 
 function get_key_by_aid($aid,$dt){
-$ks=dirname(__FILE__)."/0_blog_page_pwd.json";
+$ks=__DIR__."/0_blog_page_pwd.json";
 if(!is_readable($ks)){
 show_error_and_exit("request_failed_keystore_not_found",500);
 }
@@ -37,16 +35,19 @@ show_error_and_exit("request_failed_invalid_keystore_data",500);
 }
 if(array_key_exists($aid,$ks)){
 if(is_array($ks[$aid])){
-for($a=0;$a<count($ks[$aid]);$a++){
-if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$ks[$aid][$a].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
-return [$ks[$aid][$a],$a];
+$k=array_keys($ks[$aid]);
+for($a=0;$a<count($k);$a++){
+if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$ks[$aid][$k[$a]].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
+return [$ks[$aid][$k[$a]],$k[$a]];
 }
+unset($a);
+unset($k);
 }
-return [false,-1];
+return [false,false];
 }
-return [$ks[$aid],-1];
+return [$ks[$aid],false];
 }
-return ["ly65_common_key",-1];
+return ["ly65_common_key",false];
 }
 
 function checkauth($dt){

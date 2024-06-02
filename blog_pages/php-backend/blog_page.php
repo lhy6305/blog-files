@@ -60,7 +60,6 @@ return $before.$str.$after;
 //end of mb_str_pad
 }
 }
-
 function custom_pad($d){
 $p=16-(strlen($d)%16);
 if($p==0){
@@ -98,12 +97,12 @@ if(array_key_exists($aid,$ks)){
 if(is_array($ks[$aid])){
 $k=array_keys($ks[$aid]);
 for($a=0;$a<count($k);$a++){
-if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$ks[$aid][$k[$a]].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
-return [$ks[$aid][$k[$a]],$k[$a]];
+if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$k[$a].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
+return [$k[$a],$ks[$aid][$k[$a]]];
+}
 }
 unset($a);
 unset($k);
-}
 return [false,false];
 }
 return [$ks[$aid],false];
@@ -264,7 +263,7 @@ $dt=get_authed_data(true);
 //[$error_flag,[time,salt,[dec]data,error_type],$key,$i];
 
 if($dt[0]){
-show_error_and_exit("request_failed_permission_denied: ".json_encode($dt[1]["error_type"]),401);
+show_error_and_exit("request_failed_permission_denied: ".implode("|",$dt[1]["error_type"]),401);
 }
 
 /*

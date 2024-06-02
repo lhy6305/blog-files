@@ -37,12 +37,12 @@ if(array_key_exists($aid,$ks)){
 if(is_array($ks[$aid])){
 $k=array_keys($ks[$aid]);
 for($a=0;$a<count($k);$a++){
-if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$ks[$aid][$k[$a]].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
-return [$ks[$aid][$k[$a]],$k[$a]];
+if(substr(md5(hex2bin(hash("sha256",$dt["salt"].$dt["time"].hex2bin(hash("sha512",$dt["salt"].$k[$a].$dt["salt"])).$dt["time"]))),0,6)==$dt["sign"]){
+return [$k[$a],$ks[$aid][$k[$a]]];
+}
 }
 unset($a);
 unset($k);
-}
 return [false,false];
 }
 return [$ks[$aid],false];

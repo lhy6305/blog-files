@@ -27,7 +27,7 @@ $dt=get_authed_data(true);
 //[$error_flag,[time,salt,[dec]data,error_type],$key,$i];
 
 if($dt[0]){
-show_error_and_exit("request_failed_permission_denied: ".json_encode($dt[1]["error_type"]),401);
+show_error_and_exit("request_failed_permission_denied: ".implode("|",$dt[1]["error_type"]),401);
 }
 
 /*

@@ -19,7 +19,10 @@
 
     //custom req file id
     window.api_article_id=window.api_article_id||(function() {
-        var api_article_id=window.location.pathname.match(new RegExp("/*archives/*([0-9]+)/*"));
+        var api_article_id=[];
+        try {
+            api_article_id=window.location.pathname.match(new RegExp("/*archives/*([0-9]+)/*"));
+        } catch {}
         if(api_article_id.length!=2) {
             raise_fatal_error("呜哇！通过location.pathname查询文章id失败！请联系管理员修复喵...", "aid not found in location.pathname");
             return "";

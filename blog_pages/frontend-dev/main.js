@@ -11,8 +11,8 @@
             a.innerHTML="L.D.B.登录页面加载错误："+ustr;
             elems[0].parentNode.insertBefore(a, elems[0]);
         }
-        for(var elemi=0; elemi<elems.length; elemi++) {
-            elems[elemi].parentNode.removeChild(elems[elemi]);
+        while(elems.length>0) {
+            elems[0].parentNode.removeChild(elems[0]);
         }
         try {
             delete window.CryptoJS;
@@ -160,13 +160,20 @@
             })();
         }
 
-        var a;
-        do {
-            a=document.getElementsByClassName("ly65lgp-script-custom");
-            a[0].parentNode.removeChild(a[0]);
-        } while(a.length>0);
-        (a=ge("ly65lgp-div-script-loading-tip")).parentNode.removeChild(a);
-        ge("ly65lgp-div-token-login").style.display="block";
+        elems=document.getElementsByClassName("ly65lgp-script-custom");
+        while(elems.length>0) {
+            elems[0].parentNode.removeChild(elems[0]);
+        }
+        elems=document.getElementsByClassName("ly65lgp-div-script-loading-tip");
+        while(elems.length>0) {
+            elems[0].parentNode.removeChild(elems[0]);
+        }
+
+        elems=document.getElementsByClassName("ly65lgp-div-token-login");
+        for(var elemi=0; elemi<elems.length; elemi++) {
+            elems[elemi].style.display="block";
+        }
+
     });
 
 })();

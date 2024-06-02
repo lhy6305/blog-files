@@ -85,7 +85,7 @@ return $d;
 }
 
 function get_key_by_aid($aid,$dt){
-$ks=__DIR__."/0_blog_page_pwd.json";
+$ks=__DIR__."/internal/blog_pages/0_blog_page_pwd.json";
 if(!is_readable($ks)){
 show_error_and_exit("request_failed_keystore_not_found",500);
 }

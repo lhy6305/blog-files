@@ -11,7 +11,7 @@
             delete window.CryptoJS;
             delete window.encapi;
         } catch {}
-        throw new error(lstr);
+        throw new Error(lstr);
     };
 
     //custom api address

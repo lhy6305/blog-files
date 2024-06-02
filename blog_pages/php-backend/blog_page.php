@@ -304,7 +304,7 @@ $afi=$afid.".html";
 }
 
 if(!is_readable($afi)){
-show_error_and_exit("request_failed_article_file_not_found: ".$afi,404);
+show_error_and_exit("request_failed_article_file_not_found: ".basename($afi),404);
 }
 
 $afi=file_get_contents($afi);

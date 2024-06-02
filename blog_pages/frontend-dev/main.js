@@ -1,16 +1,26 @@
 (function() {
 
     var raise_fatal_error=function(ustr, lstr) {
-        var a=document.getElementsByClassName("ly65lgp-outter-container-list");
-        if(a.length<=0) {
-            window.alert(ustr);
+        var elems=document.getElementsByClassName("ly65lgp-outter-container");
+        var flag_need_alert=false;
+        if(elems.length<=0) {
+            flag_need_alert=true;
         } else {
-            a[0].innerHTML="<div style=\"display:block;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;\">错误："+ustr+"</div>";
+            var a=document.createElement("div");
+            a.style="display:block;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;";
+            a.innerHTML="L.D.B.登录页面加载错误："+ustr;
+            elems[0].parentNode.insertBefore(a, elems[0]);
+        }
+        for(var elemi=0; elemi<elems.length; elemi++) {
+            elems[elemi].parentNode.removeChild(elems[elemi]);
         }
         try {
             delete window.CryptoJS;
             delete window.encapi;
         } catch {}
+        if(flag_need_alert) {
+            window.alert(ustr);
+        }
         throw new Error(lstr);
     };
 

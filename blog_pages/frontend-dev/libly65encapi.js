@@ -207,7 +207,7 @@ cu.send(dta);
 return cu;
 };
 
-window.encapi=encapi;
+window.ly65encapi=encapi;
 })();
 /*
 salt生成算法（反正就是随机的128位）

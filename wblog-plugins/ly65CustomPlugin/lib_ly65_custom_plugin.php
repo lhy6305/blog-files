@@ -3,10 +3,6 @@
 require_once(__DIR__."/libutil.php");
 
 function ly65_custom_hook__read_template($id){
-if(strpos($id,".")===false){
-$id.=".html";
-}
-$id=__DIR__."/template/".$id;
 if(!is_readable($id)){
 return -1;
 }
@@ -103,7 +99,11 @@ continue;
 }
 array_shift($b);
 $tf=$b[0];
-array_shift($b);
+$tf=__DIR__."/template/".$tf;
+if(!is_readable($tf)){
+$tf.=".html";
+}
+$b[0]=$tf;
 $tf_1=ly65_custom_hook__read_template($tf);
 
 if($tf_1===-1){
@@ -135,7 +135,7 @@ unset($a);
 unset($b);
 unset($tf);
 
-//#template|ly65_LEG|文档权限分级 1 (perm_intl)<br>您尚未获取perm_intl级权限，请在下面验证身份
+//#template|LDB_login_page|文档权限分级 1 (perm_intl)<br>您尚未获取perm_intl级权限，请在下面验证身份
 
 $str=implode("\r\n",$str);
 

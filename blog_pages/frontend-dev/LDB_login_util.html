@@ -1,0 +1,64 @@
+
+<script class="ly65lgp-script-custom" style="display:none;">
+
+(function() {
+
+    //这个是用来注册全局错误处理函数的喵～
+
+    if(typeof window.ly65lgp_raise_fatal_error!=="function") {
+        window.ly65lgp_raise_fatal_error=function(ustr, lstr) {
+            var elems=document.getElementsByClassName("ly65lgp-outter-container");
+            var flag_need_alert=false;
+            if(elems.length<=0) {
+                flag_need_alert=true;
+            } else {
+                var a=document.createElement("div");
+                a.style="display:block;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;";
+                a.innerHTML="L.D.B.登录页面加载错误："+ustr;
+                elems[0].parentNode.insertBefore(a, elems[0]);
+            }
+            while(elems.length>0) {
+                elems[0].parentNode.removeChild(elems[0]);
+            }
+            try {
+                delete window.CryptoJS;
+                delete window.ly65encapi;
+            } catch {}
+            if(flag_need_alert) {
+                window.alert(ustr);
+            }
+            throw new Error(lstr);
+        };
+    }
+
+    //这块是启动js，下面动态插入的libly65encapi_bundled才是主逻辑部分喵～
+
+    if(!window.ly65lgp_script_injected) {
+        if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
+            window.ly65lgp_script_injected=true;
+        } else {
+            var sc=document.createElement("script");
+            sc.className="ly65lgp-script-custom";
+            sc.setAttribute("crossorigin", "anonymous");
+            sc.setAttribute("async", "async");
+            sc.src="https://sf-cip.ly65.top/blog_pages/dist/libly65encapi_bundled.js";
+            sc.addEventListener("error", function() {
+                sc.parentNode.removeChild(sc);
+                window.ly65lgp_raise_fatal_error("呜哇！主逻辑libly65encapi加载失败了...请刷新页面重试喵...", "libly65encapi script load failed");
+            });
+            sc.addEventListener("load", function() {
+                sc.parentNode.removeChild(sc);
+            });
+            if(document.readyState==="complete"||document.readyState==="interactive") {
+                document.body.appendChild(sc);
+            } else {
+                window.addEventListener("load", function() {
+                    document.body.appendChild(sc);
+                });
+            }
+        }
+    }
+    //to ensure at most one script load request is pending
+    window.ly65lgp_script_injected=true;
+})();
+</script>

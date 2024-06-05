@@ -44,7 +44,6 @@ multiple flags can be used together
 V: variable-like. e.g. "string"
 N: same as V, but with quotes removed. e.g. string
 U: utf-8 encoded. e.g. \uxxxx\uxxxx\uxxxx
-todo: 添加顺序处理功能，不再忽略重复的flag
 */
 preg_match("/#REPLACE-ANCHOR-([A-Z]*?)([0-9]+)#/",$str,$ma,PREG_OFFSET_CAPTURE,$ptr);
 if(count($ma)<=0){
@@ -54,32 +53,33 @@ $da="";
 if(array_key_exists((int)$ma[2][0],$li)){
 $da=$li[$ma[2][0]];
 }
-$ma[1][0]=strtoupper($ma[1][0]);
 
-if(stripos($ma[1][0],"V")!==false||stripos($ma[1][0],"N")!==false){
+$ma[1][0]=strtoupper($ma[1][0]);
+//process flags
+for($a=0;$a<strlen($ma[1][0]);$a++){
+if($ma[1][0][$a]=="V"){
 @$da=(string)$da;
 $da=json_encode($da,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
-if(stripos($ma[1][0],"N")!==false){
+}else if($ma[1][0][$a]=="N"){
 $da=substr($da,1,-1);
-}
-}
-
-if(stripos($ma[1][0],"U")!==false){
+}else if($ma[1][0][$a]=="U"){
 $da1="";
-for($a=0;$a<mb_strlen($da);$a++){
-$b=mb_substr($da,$a,1);
-if(strlen($b)===1){
-$da1.=$b;
+for($b=0;$b<mb_strlen($da);$b++){
+$c=mb_substr($da,$b,1);
+if(strlen($c)===1){
+$da1.=$c;
 }else{
-$da1.=sprintf("\\u%04x",mb_ord($b));
+$da1.=sprintf("\\u%04x",mb_ord($c));
 }
 }
 $da=$da1;
 unset($da1);
-unset($a);
 unset($b);
+unset($c);
 }
-
+}
+unset($a);
+//merge string
 $str=substr($str,0,$ma[0][1]).$da.substr($str,$ma[0][1]+strlen($ma[0][0]));
 $ptr=$ma[0][1]+strlen($da);
 }

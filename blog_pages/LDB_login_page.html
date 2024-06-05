@@ -2,7 +2,7 @@
 <div class="ly65lgp-outter-container">
 
 <div class="ly65lgp-div-permission-tip" style="display:none;font-size:18px;border:2px double #43b269;margin:20px auto 20px auto;color:#8e5100;background-color:#f9e69c2e;">
-<!-- 这里插入权限分级 -->#REPLACE-ANCHOR-1#
+<!-- 这里插入权限分级 -->#REPLACE-ANCHOR-S1#
 <br>
 </div>
 
@@ -13,18 +13,9 @@
 <br>
 </div>
 
-<!-- 这个是用来插入局部article_id以及api_addr的js喵～ -->
+<!-- 这个是用来注册全局错误处理函数的喵～ -->
 <script class="ly65lgp-script-custom" style="display:none;">
 (function() {
-    window.ly65lgp_pages=window.ly65lgp_pages||[];
-    //todo: add #REPLACE-ANCHOR-2# and #REPLACE-ANCHOR-3#
-})();
-</script>
-
-<!-- 这个是启动js，下面插入的libly65encapi.js才是主逻辑部分喵～ -->
-<script class="ly65lgp-script-custom" style="display:none;">
-(function() {
-    //window.ly65lgp_pages=window.ly65lgp_pages||[];
     if(typeof window.ly65lgp_raise_fatal_error!=="function") {
         window.ly65lgp_raise_fatal_error=function(ustr, lstr) {
             var elems=document.getElementsByClassName("ly65lgp-outter-container");
@@ -50,6 +41,25 @@
             throw new Error(lstr);
         };
     }
+})();
+</script>
+
+<!-- 这个是用来插入局部article_id以及api_addr的js喵～ -->
+<script class="ly65lgp-script-custom" style="display:none;">
+(function() {
+    window.ly65lgp_pages=window.ly65lgp_pages||[];
+try {
+    eval("window.ly65lgp_pages.unshift({\"aid\":#REPLACE-ANCHOR-C2#,\"addr\":#REPLACE-ANCHOR-C3#});");
+} catch (e) {
+    window.ly65lgp_raise_fatal_error("呜哇！文章aid插入失败了...快去联系管理员修复喵...<br><pre>"+e+"</pre><pre>"+e.stack+"</pre>", "ly65lgp_pages.unshift() failed.");
+}
+})();
+</script>
+
+<!-- 这个是启动js，下面插入的libly65encapi.js才是主逻辑部分喵～ -->
+<script class="ly65lgp-script-custom" style="display:none;">
+(function() {
+    //window.ly65lgp_pages=window.ly65lgp_pages||[];
     if(!window.ly65lgp_script_injected) {
         if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
             window.ly65lgp_newblock_handler();

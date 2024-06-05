@@ -36,17 +36,55 @@ function ly65_custom_hook__replace_anchor($str,$li){
 $ptr=0;
 for(;;){
 $ma=[];
-preg_match("/#REPLACE-ANCHOR-([0-9]+)#/",$str,$ma,PREG_OFFSET_CAPTURE,$ptr);
+/*
+replace flag list
+multiple flags can be used together
+
+<empty>: raw string. e.g. string
+V: variable-like. e.g. "string"
+N: same as V, but with quotes removed. e.g. string
+U: utf-8 encoded. e.g. \uxxxx\uxxxx\uxxxx
+todo: 添加顺序处理功能，不再忽略重复的flag
+*/
+preg_match("/#REPLACE-ANCHOR-([A-Z]*?)([0-9]+)#/",$str,$ma,PREG_OFFSET_CAPTURE,$ptr);
 if(count($ma)<=0){
 break;
 }
-if(!array_key_exists((int)$ma[1][0],$li)){
-$li[$ma[1][0]]="";
+$da="";
+if(array_key_exists((int)$ma[2][0],$li)){
+$da=$li[$ma[2][0]];
 }
-$str=substr($str,0,$ma[0][1]).$li[$ma[1][0]].substr($str,$ma[0][1]+strlen($ma[0][0]));
-$ptr=$ma[0][1]+strlen($li[$ma[1][0]]);
+$ma[1][0]=strtoupper($ma[1][0]);
+
+if(stripos($ma[1][0],"V")!==false||stripos($ma[1][0],"N")!==false){
+@$da=(string)$da;
+$da=json_encode($da,JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE);
+if(stripos($ma[1][0],"N")!==false){
+$da=substr($da,1,-1);
+}
+}
+
+if(stripos($ma[1][0],"U")!==false){
+$da1="";
+for($a=0;$a<mb_strlen($da);$a++){
+$b=mb_substr($da,$a,1);
+if(strlen($b)===1){
+$da1.=$b;
+}else{
+$da1.=sprintf("\\u%04x",mb_ord($b));
+}
+}
+$da=$da1;
+unset($da1);
+unset($a);
+unset($b);
+}
+
+$str=substr($str,0,$ma[0][1]).$da.substr($str,$ma[0][1]+strlen($ma[0][0]));
+$ptr=$ma[0][1]+strlen($da);
 }
 unset($ma);
+unset($da);
 return $str;
 }
 

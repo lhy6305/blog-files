@@ -5,30 +5,38 @@
     }
 
     //global custom api address (used only if window.ly65lgp_pages[].addr is empty)
-    window.api_addr_base=window.api_addr_base||(document.location.protocol=="https:"?"https://wsw2-v6.ly65.top:2260/blog_page.php":"http://wsw2-v6.ly65.top:2250/blog_page.php");
+    window.ly65lgp_api_addr_base=window.ly65lgp_api_addr_base||(document.location.protocol=="https:"?"https://wsw2-v6.ly65.top:2260/blog_page.php":"http://wsw2-v6.ly65.top:2250/blog_page.php");
+
+    var ly65encapi=window.ly65encapi;
 
     var sync_time=function() {
-        var st=window.ly65encapi.gt(0x00);
-        window.ly65encapi.sendRequest(window.api_addr_base+"?synct="+Number(st), "GET", (function(dt, cu) {
-            if(dt===false) {
-                window.ly65encapi.log("sync time failed");
-                return false;
-            }
-            try {
-                dt=JSON.parse(dt);
-            } catch(e) {
-                window.ly65encapi.log("sync time failed");
-                return false;
-            }
-            dt=dt["data"];
-            dt=Number(dt);
-            if(isNaN(dt)) {
-                window.ly65encapi.log("sync time failed");
-                return false;
-            }
-            window.ly65encapi.time_delta=dt;
-            window.ly65encapi.log("sync time succ, delta="+dt);
-        }), null, true);
+        try {
+            var st=ly65encapi.gt(0x00);
+            ly65encapi.sendRequest(window.ly65lgp_api_addr_base+"?synct="+Number(st), "GET", (function(dt, cu) {
+                if(dt===false) {
+                    ly65encapi.log("sync time failed");
+                    return false;
+                }
+                try {
+                    dt=JSON.parse(dt);
+                } catch(e) {
+                    ly65encapi.log("sync time failed");
+                    return false;
+                }
+                dt=dt["data"];
+                dt=Number(dt);
+                if(isNaN(dt)) {
+                    ly65encapi.log("sync time failed");
+                    return false;
+                }
+                ly65encapi.time_delta=dt;
+                ly65encapi.log("sync time succ, delta="+dt);
+            }), null, true);
+        } catch(e) {
+            console.error(e);
+            window.ly65lgp_raise_fatal_error("呜哇！遇到了预期外的错误！请查看控制台喵...", "unexpected error");
+            //throw ...;
+        }
     };
 
     var get_block_elem_container=function(elem) {
@@ -95,7 +103,7 @@
                 })();
             }
             if(!("addr" in pg)||typeof pg.addr !== "string"||pg.addr.length<=7) {
-                pg.addr=window.api_addr_base;
+                pg.addr=window.ly65lgp_api_addr_base;
             }
             try {
                 ct.setAttribute("ly65lgp-aid", pg.aid);
@@ -123,7 +131,9 @@
                         ge("ly65lgp-div-processing-tip").style.display="block";
                     };
                     libui.load_succ=function() {
-                        window.ly65encapi.destroyToken();
+                        try {
+                            ly65encapi.destroyToken();
+                        } catch {}
                         var a;
                         (a=ge("ly65lgp-div-permission-tip")).parentNode.removeChild(a);
                         (a=ge("ly65lgp-div-error-message")).parentNode.removeChild(a);
@@ -135,7 +145,9 @@
                         delete libui;
                     };
                     libui.load_fail=function(str) {
-                        window.ly65encapi.destroyToken();
+                        try {
+                            ly65encapi.destroyToken();
+                        } catch {}
                         if(str.length<=0) {
                             str="未定义的错误消息";
                         }
@@ -150,24 +162,38 @@
                     if(a.length<=0) {
                         a="ly65_common_key";
                     }
-                    var flag=window.ly65encapi.setToken(a);
+                    try {
+                        var flag=ly65encapi.setToken(a);
+                    } catch(err) {
+                        console.error(err);
+                        window.ly65lgp_raise_fatal_error("呜哇！ly65encapi.setToken()执行失败！请更换浏览器环境重试，或联系管理员...", "unexpected ly65encapi.setToken() failed");
+                        //throw ...;
+                        return false;
+                    }
                     a=null;
                     if(flag==false) {
                         libui.load_fail("ly65encapi.set_token()执行失败！请检查输入是否为合法字符");
                         return false;
                     }
-                    var da=window.ly65encapi.encrypt("");
+                    var da;
+                    try {
+                        da=ly65encapi.encrypt("");
+                    } catch(err) {
+                        console.error(err);
+                        da=false;
+                    }
                     if(da===false) {
-                        libui.load_fail("ly65encapi.encrypt()执行失败！请更换浏览器环境重试，或联系管理员");
+                        //libui.load_fail("ly65encapi.encrypt()执行失败！请更换浏览器环境重试，或联系管理员");
                         window.ly65lgp_raise_fatal_error("呜哇！ly65encapi.encrypt()执行失败！请更换浏览器环境重试，或联系管理员...", "unexpected ly65encapi.encrypt() failed");
                         //throw ...;
                         return false;
                     }
                     a="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+ct_aid;
-                    window.ly65encapi.sendRequest(ct_addr, "POST", function(data, cu) {
+                    ly65encapi.sendRequest(ct_addr, "POST", function(data, cu) {
                         try {
                             data=JSON.parse(data);
-                        } catch(e) {
+                        } catch(err) {
+                            console.error(err);
                             libui.load_fail("JSON.parse()执行失败！请联系管理员");
                             return false;
                         }
@@ -175,7 +201,7 @@
                             libui.load_fail("数据库登录失败！"+data["msg"]+"("+data["code"]+")");
                             return false;
                         }
-                        da=window.ly65encapi.decrypt({"data":data["data"], "k":da[1], "i":da[2]});
+                        da=ly65encapi.decrypt({"data":data["data"], "k":da[1], "i":da[2]});
                         if(da===false) {
                             libui.load_fail("ly65encapi.decrypt()执行失败！请重试，或联系管理员");
                             return false;

@@ -51,7 +51,7 @@
     if(!window.ly65lgp_flag_script_injecting&&!window.ly65lgp_flag_script_injected) {
         //LDB_login_util not imported,
         //so function window.ly65lgp_raise_fatal_error is not exist
-        //use window.alert() instead
+        //set element content or use window.alert() instead
         var elems=document.getElementsByClassName("ly65lgp-div-script-loading-tip");
         while(elems.length>0) {
             elems[0].parentNode.removeChild(elems[0]);

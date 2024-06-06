@@ -58,9 +58,13 @@
         if(document.readyState==="complete"||document.readyState==="interactive") {
             document.body.appendChild(sc);
         } else {
-            window.addEventListener("load", function() {
+            var eh;
+            window.addEventListener("load", (eh=function() {
+                try {
+                    window.removeEventListener("load", eh);
+                } catch {}
                 document.body.appendChild(sc);
-            });
+            }));
         }
 
     }

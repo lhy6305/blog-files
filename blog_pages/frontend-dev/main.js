@@ -60,6 +60,10 @@
     };
 
     var ly65lgp_newblock_handler=function() {
+        try {
+            window.removeEventListener("load", ly65lgp_newblock_handler);
+        } catch {}
+
         sync_time();
 
         var elems=document.getElementsByClassName("ly65lgp-div-permission-tip");

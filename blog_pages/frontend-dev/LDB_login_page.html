@@ -83,9 +83,7 @@ if(window.ly65lgp_script_injected) {
         if(document.readyState==="complete"||document.readyState==="interactive") {
             window.ly65lgp_newblock_handler();
         } else {
-            window.addEventListener("load", function() {
-                window.ly65lgp_newblock_handler();
-            });
+            window.addEventListener("load", window.ly65lgp_newblock_handler);
         }
     } else {
         //do nothing because the main script libly65encapi has not been loaded

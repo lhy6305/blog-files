@@ -183,6 +183,7 @@
         while(elems.length>0) {
             elems[0].parentNode.removeChild(elems[0]);
         }
+
         elems=document.getElementsByClassName("ly65lgp-div-script-loading-tip");
         while(elems.length>0) {
             elems[0].parentNode.removeChild(elems[0]);

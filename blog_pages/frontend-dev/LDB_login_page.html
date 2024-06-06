@@ -14,38 +14,6 @@
 <br>
 </div>
 
-<!-- 这个是用来插入局部article_id以及api_addr的js喵～ -->
-<!-- 有三部分是为了检查模板字符串替换是否出错喵～ -->
-<script class="ly65lgp-script-custom" style="display:none;">
-    //set a flag to detect replace error
-    window.ly65lgp_flag_check_tmp = false;
-</script>
-<script class="ly65lgp-script-custom" style="display:none;">
-    window.ly65lgp_pages=window.ly65lgp_pages||[];
-    window.ly65lgp_pages.unshift({"aid": #REPLACE-ANCHOR-VU2#, "addr": #REPLACE-ANCHOR-VU3#});    window.ly65lgp_flag_check_tmp = true;
-</script>
-<script class="ly65lgp-script-custom" style="display:none;">
-    if(!window.ly65lgp_flag_check_tmp) {
-        window.ly65lgp_raise_fatal_error("呜哇！文章aid插入失败了...快去联系管理员修复喵...", "ly65lgp_pages.unshift() failed");
-        return;
-    }
-    delete window.ly65lgp_flag_check_tmp;
-    if(window.ly65lgp_script_injected) {
-        if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
-            if(document.readyState==="complete"||document.readyState==="interactive") {
-                window.ly65lgp_newblock_handler();
-            } else {
-                window.addEventListener("load", function() {
-                    window.ly65lgp_newblock_handler();
-                });
-            }
-        } else {
-            //do nothing because the main script libly65encapi has not been loaded
-            //method ly65lgp_newblock_handler will be called by libly65encapi after load succ
-        }
-    }
-</script>
-
 <div class="ly65lgp-div-error-message" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;">
 错误：<span class="ly65lgp-span-error-tip"></span>
 <br>
@@ -72,6 +40,59 @@
 </div>
 
 <div class="ly65lgp-div-content-container" style="display:none;"></div>
+
+
+<!-- script area -->
+
+<!-- 这个是用来插入局部article_id以及api_addr的js喵～ -->
+<!-- 有三部分是为了检查模板字符串替换是否出错喵～ -->
+<script class="ly65lgp-script-custom" style="display:none;">
+(function() { //use enclosed function because some variables are defined inside
+    if(!window.ly65lgp_flag_script_injecting&&!window.ly65lgp_flag_script_injected) {
+        //LDB_login_util not imported,
+        //so function window.ly65lgp_raise_fatal_error is not exist
+        //use window.alert() instead
+        var elems=document.getElementsByClassName("ly65lgp-div-script-loading-tip");
+        while(elems.length>0) {
+            elems[0].parentNode.removeChild(elems[0]);
+        }
+        var msg="呜哇！模板文件LDB_login_util未引用...快去联系管理员修复喵...";
+        try {
+            (elems=document.getElementsByClassName("ly65lgp-div-error-message")[0]).innerHTML=msg;
+            elems.style.display="block";
+        } catch {
+            window.alert(msg);
+        }
+        throw new Error("LDB_login_util NOT imported");
+    }
+    //set a flag to detect replace anchor error
+    window.ly65lgp_flag_check_tmp = false;
+})();
+</script><script class="ly65lgp-script-custom" style="display:none;">
+window.ly65lgp_pages=window.ly65lgp_pages||[];
+window.ly65lgp_pages.unshift({"aid": #REPLACE-ANCHOR-VU2#, "addr": #REPLACE-ANCHOR-VU3#});   
+window.ly65lgp_flag_check_tmp = true;
+</script><script class="ly65lgp-script-custom" style="display:none;">
+if(!window.ly65lgp_flag_check_tmp) {
+    window.ly65lgp_raise_fatal_error("呜哇！文章aid插入失败了...快去联系管理员修复喵...", "ly65lgp_pages.unshift() failed");
+    //throw ...;
+}
+delete window.ly65lgp_flag_check_tmp;
+if(window.ly65lgp_script_injected) {
+    if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
+        if(document.readyState==="complete"||document.readyState==="interactive") {
+            window.ly65lgp_newblock_handler();
+        } else {
+            window.addEventListener("load", function() {
+                window.ly65lgp_newblock_handler();
+            });
+        }
+    } else {
+        //do nothing because the main script libly65encapi has not been loaded
+        //method ly65lgp_newblock_handler will be called by libly65encapi after load succ
+    }
+}
+</script>
 
 <!-- end of main container -->
 </div>

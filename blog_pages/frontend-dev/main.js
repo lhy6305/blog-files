@@ -1,6 +1,10 @@
 (function() {
+    if(!window.ly65lgp_flag_script_injecting||window.ly65lgp_flag_script_injected) {
+        console.warn("warning: ly65encapi was imported wrongly: flag_script_injecting is "+window.ly65lgp_flag_script_injecting+" and flag_script_injected is "+window.ly65lgp_flag_script_injected);
+        return;
+    }
 
-    //global custom api address (be used only if window.ly65lgp_pages[].addr is empty)
+    //global custom api address (used only if window.ly65lgp_pages[].addr is empty)
     window.api_addr_base=window.api_addr_base||(document.location.protocol=="https:"?"https://wsw2-v6.ly65.top:2260/blog_page.php":"http://wsw2-v6.ly65.top:2250/blog_page.php");
 
     var sync_time=function() {
@@ -33,7 +37,7 @@
         }
         if(elem==null||!elem.classList.contains("ly65lgp-outter-container")) {
             window.ly65lgp_raise_fatal_error("呜哇！遇到了预期外的DOM查找错误！你是不是偷偷使用F12把小喵的房子搬走了...", "unexpected DOM lookup error");
-            return null; // will not be executed because an error has already been thrown
+            //throw ...;
         }
         return elem;
     };
@@ -81,7 +85,7 @@
                     } catch {}
                     if(api_article_id==null||api_article_id.length!=2) {
                         window.ly65lgp_raise_fatal_error("呜哇！文章id没有指定，并且通过location.pathname查询文章id失败了...快去联系管理员修复喵...", "aid is not set, and is not found in location.pathname");
-                        return ""; // will not be executed because an error has already been thrown
+                        //throw ...;
                     }
                     return api_article_id[1];
                 })();
@@ -94,7 +98,7 @@
                 ct.setAttribute("ly65lgp-addr", pg.addr);
             } catch(e) {
                 window.ly65lgp_raise_fatal_error("呜哇！ct.setAttribute()出错了...快去联系管理员修复喵...<br><pre>"+e.name+": "+e.message+"</pre><pre>"+e.stack+"</pre>", e);
-                return ""; // will not be executed because an error has already been thrown
+                //throw ...;
             }
             (function() {
                 var ct=get_block_elem_container(elems[elemi]);
@@ -105,7 +109,7 @@
                     var ct_addr=ct.getAttribute("ly65lgp-addr");
                     if(ct_aid===null||ct_aid.length<=0||ct_addr===null||ct_addr.length<=7) {
                         window.ly65lgp_raise_fatal_error("呜哇！遇到了预期外的属性访问错误！你是不是使用F12偷偷把小喵写好的属性删掉了...", "container.aid or container.addr not exist");
-                        return ""; // will not be executed because an error has already been thrown
+                        //throw ...;
                     }
                     var libui= {};
                     libui.load_start=function() {
@@ -145,12 +149,14 @@
                     var flag=window.ly65encapi.setToken(a);
                     a=null;
                     if(flag==false) {
-                        libui.load_fail("ly65encapi.set_token失败！请检查输入是否为合法字符");
+                        libui.load_fail("ly65encapi.set_token()执行失败！请检查输入是否为合法字符");
                         return false;
                     }
                     var da=window.ly65encapi.encrypt("");
                     if(da===false) {
-                        libui.load_fail("ly65encapi.encrypt失败！请联系管理员或更换浏览器环境重试");
+                        libui.load_fail("ly65encapi.encrypt()执行失败！请更换浏览器环境重试，或联系管理员");
+                        window.ly65lgp_raise_fatal_error("呜哇！ly65encapi.encrypt()执行失败！请更换浏览器环境重试，或联系管理员...", "unexpected ly65encapi.encrypt() failed");
+                        //throw ...;
                         return false;
                     }
                     a="time="+da[0].time+"&salt="+da[0].salt+"&sign="+da[0].sign+"&aid="+ct_aid;
@@ -158,7 +164,7 @@
                         try {
                             data=JSON.parse(data);
                         } catch(e) {
-                            libui.load_fail("JSON.parse失败！请联系管理员");
+                            libui.load_fail("JSON.parse()执行失败！请联系管理员");
                             return false;
                         }
                         if(data["code"]!=0) {
@@ -167,7 +173,7 @@
                         }
                         da=window.ly65encapi.decrypt({"data":data["data"], "k":da[1], "i":da[2]});
                         if(da===false) {
-                            libui.load_fail("ly65encapi.decrypt失败！请联系管理员或更换浏览器环境重试");
+                            libui.load_fail("ly65encapi.decrypt()执行失败！请重试，或联系管理员");
                             return false;
                         }
                         ge("ly65lgp-div-content-container").innerHTML=da;
@@ -208,7 +214,7 @@
             }
             //this should not be executed, or someone has modified the content
             window.ly65lgp_raise_fatal_error("呜哇！遇到了预期外的元素匹配错误！你是不是偷偷使用F12把小喵的房子搬走了...", "login block container element match failed");
-            return ""; // will not be executed because an error has already been thrown
+            //throw ...;
         }
         //end of ly65lgp_newblock_handler()
     };
@@ -221,4 +227,6 @@
 
     window.ly65lgp_newblock_handler=ly65lgp_newblock_handler;
 
+    window.ly65lgp_flag_script_injecting=false;
+    window.ly65lgp_flag_script_injected=true;
 })();

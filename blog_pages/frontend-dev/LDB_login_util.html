@@ -31,34 +31,41 @@
         };
     }
 
-    //这块是启动js，下面动态插入的libly65encapi_bundled才是主逻辑部分喵～
+    //这块是启动js，下面动态插入的libly65encapi_bundled.js才是主逻辑部分喵～
 
-    if(!window.ly65lgp_script_injected) {
+    if(!window.ly65lgp_flag_script_injecting&&!window.ly65lgp_flag_script_injected) {
         if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
-            window.ly65lgp_script_injected=true;
-        } else {
-            var sc=document.createElement("script");
-            sc.className="ly65lgp-script-custom";
-            sc.setAttribute("crossorigin", "anonymous");
-            sc.setAttribute("async", "async");
-            sc.src="https://sf-cip.ly65.top/blog_pages/dist/libly65encapi_bundled.js";
-            sc.addEventListener("error", function() {
-                sc.parentNode.removeChild(sc);
-                window.ly65lgp_raise_fatal_error("呜哇！主逻辑libly65encapi加载失败了...请刷新页面重试喵...", "libly65encapi script load failed");
-            });
-            sc.addEventListener("load", function() {
-                sc.parentNode.removeChild(sc);
-            });
-            if(document.readyState==="complete"||document.readyState==="interactive") {
-                document.body.appendChild(sc);
-            } else {
-                window.addEventListener("load", function() {
-                    document.body.appendChild(sc);
-                });
-            }
+            window.ly65lgp_raise_fatal_error("呜哇！你做了什么...小喵还没有回家，为什么家里已经有一只喵了...", "libly65encapi env detected BEFORE code injection");
+            //throw ...;
         }
+
+        var sc=document.createElement("script");
+        sc.className="ly65lgp-script-custom";
+        sc.setAttribute("crossorigin", "anonymous");
+        sc.setAttribute("async", "async");
+        sc.src="https://sf-cip.ly65.top/blog_pages/dist/libly65encapi_bundled.js";
+        sc.addEventListener("error", function() {
+            sc.parentNode.removeChild(sc);
+            window.ly65lgp_raise_fatal_error("呜哇！主逻辑libly65encapi加载失败了...请刷新页面重试喵...", "libly65encapi script load failed");
+            //throw ...;
+        });
+        //remove this because libly65encapi will remove all custom script element after loaded
+        //sc.addEventListener("load", function() {
+        //    if(sc.parentNode) {
+        //        sc.parentNode.removeChild(sc);
+        //    }
+        //});
+        if(document.readyState==="complete"||document.readyState==="interactive") {
+            document.body.appendChild(sc);
+        } else {
+            window.addEventListener("load", function() {
+                document.body.appendChild(sc);
+            });
+        }
+
     }
     //to ensure at most one script load request is pending
-    window.ly65lgp_script_injected=true;
+    window.ly65lgp_flag_script_injecting=true;
+    window.ly65lgp_flag_script_injected=false;
 })();
 </script>

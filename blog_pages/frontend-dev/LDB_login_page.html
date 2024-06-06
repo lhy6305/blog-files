@@ -15,14 +15,21 @@
 </div>
 
 <!-- 这个是用来插入局部article_id以及api_addr的js喵～ -->
+<!-- 有三部分是为了检查模板字符串替换是否出错喵～ -->
 <script class="ly65lgp-script-custom" style="display:none;">
-(function() {
+    //set a flag to detect replace error
+    window.ly65lgp_flag_check_tmp = false;
+</script>
+<script class="ly65lgp-script-custom" style="display:none;">
     window.ly65lgp_pages=window.ly65lgp_pages||[];
-    try {
-        eval("window.ly65lgp_pages.unshift({\"aid\":#REPLACE-ANCHOR-VU2#,\"addr\":#REPLACE-ANCHOR-VU3#});");
-    } catch(e) {
-        window.ly65lgp_raise_fatal_error("呜哇！文章aid插入失败了...快去联系管理员修复喵...<br><pre>"+e.name+": "+e.message+"</pre><pre>"+e.stack+"</pre>", "ly65lgp_pages.unshift() failed");
+    window.ly65lgp_pages.unshift({"aid": #REPLACE-ANCHOR-VU2#, "addr": #REPLACE-ANCHOR-VU3#});    window.ly65lgp_flag_check_tmp = true;
+</script>
+<script class="ly65lgp-script-custom" style="display:none;">
+    if(!window.ly65lgp_flag_check_tmp) {
+        window.ly65lgp_raise_fatal_error("呜哇！文章aid插入失败了...快去联系管理员修复喵...", "ly65lgp_pages.unshift() failed");
+        return;
     }
+    delete window.ly65lgp_flag_check_tmp;
     if(window.ly65lgp_script_injected) {
         if(window.CryptoJS&&window.ly65encapi&&typeof window.ly65lgp_newblock_handler==="function") {
             if(document.readyState==="complete"||document.readyState==="interactive") {
@@ -37,7 +44,6 @@
             //method ly65lgp_newblock_handler will be called by libly65encapi after load succ
         }
     }
-})();
 </script>
 
 <div class="ly65lgp-div-error-message" style="display:none;font-size:26px;font-weight:bold;border:2px solid #4bccff;margin:20px auto 20px auto;color:#ff3b3b;background-color:#fff343;">

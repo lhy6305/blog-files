@@ -219,8 +219,7 @@ var main_handler=async function(request, env) {
                 cf: {
                     cacheEverything: true,
                     cacheTtlByStatus: {
-                        200: 21600,
-                        206: 21600,
+                        "200-299": 129600,
                         404: 300,
                     },
                 }
@@ -268,8 +267,7 @@ var main_handler=async function(request, env) {
             cf: {
                 cacheEverything: true,
                 cacheTtlByStatus: {
-                    200: 21600,
-                    206: 21600,
+                    "200-299": 129600,
                     404: 300,
                 },
             }

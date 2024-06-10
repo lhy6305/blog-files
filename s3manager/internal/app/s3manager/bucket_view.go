@@ -8,24 +8,12 @@ import (
 	"path"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/facette/natsort"
 	"github.com/minio/minio-go/v7"
 )
-
-func extractNumber(filename string) int {
-	parts := strings.Split(filename, "_") // Split on underscore
-	if len(parts) > 1 {
-		numberPart := strings.TrimSuffix(parts[1], ".txt") // Remove ".txt"
-		number, err := strconv.Atoi(numberPart)            // Convert to integer
-		if err == nil {
-			return number
-		}
-	}
-	return 0 // Return 0 if no number was found
-}
 
 // HandleBucketView shows the details page of a bucket.
 func HandleBucketView(s3 S3, templates fs.FS, allowDelete bool, listRecursive bool) http.HandlerFunc {
@@ -80,13 +68,8 @@ func HandleBucketView(s3 S3, templates fs.FS, allowDelete bool, listRecursive bo
 		}
 
 		// Now that we have all the objects, we can sort them
-		sort.SliceStable(objs, func(i, j int) bool {
-			// Extract the numbers from the filename
-			num1 := extractNumber(objs[i].Key)
-			num2 := extractNumber(objs[j].Key)
-
-			// Compare the two numbers
-			return num1 < num2
+		sort.Slice(objs, func(i, j int) bool {
+			return natsort.Compare(objs[i].Key, objs[j].Key)
 		})
 
 		data := pageData{

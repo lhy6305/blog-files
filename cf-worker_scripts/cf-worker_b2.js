@@ -177,8 +177,9 @@ var main_handler=async function(request, env) {
             status: 500,
             statusText: null,
             headers: {
-                "content-type": "text/plain; charset=utf-8",
-                "cache-control": "max-age=0, no-cache, no-store",
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "text/plain; charset=utf-8",
+                "Cache-Control": "max-age=0, no-cache, no-store",
             },
         });
     }
@@ -191,7 +192,8 @@ var main_handler=async function(request, env) {
             status: 405,
             statusText: null,
             headers: {
-                "cache-control": "public, max-age=300",
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=300",
             },
         });
     }
@@ -255,7 +257,8 @@ var main_handler=async function(request, env) {
             status: 400,
             statusText: null,
             headers: {
-                "cache-control": "public, max-age=21600, immutable",
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=21600, immutable",
             },
         });
     }
@@ -267,7 +270,8 @@ var main_handler=async function(request, env) {
             status: 403,
             statusText: null,
             headers: {
-                "cache-control": "public, max-age=300",
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=300",
             },
         });
     }
@@ -340,7 +344,8 @@ var main_handler=async function(request, env) {
                     status: 500,
                     statusText: null,
                     headers: {
-                        "cache-control": "public, max-age=300",
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=300",
                     },
                 });
             }
@@ -363,6 +368,7 @@ var main_handler=async function(request, env) {
     }
 
     var ret_hd=new Headers(ret.headers);
+    ret_hd.set("Access-Control-Allow-Origin", "*");
     ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
 
     if(ret.status != 200 && ret.status != 206) {

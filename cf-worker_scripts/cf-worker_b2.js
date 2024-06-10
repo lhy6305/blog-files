@@ -217,6 +217,9 @@ var main_handler=async function(request, env) {
         flag_req_is_dir=true;
     }
     path=path.replace(new RegExp("\/$"), "");
+
+    path=decodeURIComponent(path);
+
     // Split the path into segments
     var path_seg=path.split("/");
 

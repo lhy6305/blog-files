@@ -1,5 +1,5 @@
 
-// Modified from https://github.com/backblaze-b2-samples/cloudflare-b2/blob/main/index.js by ly65
+// Modified from https://github.com/backblaze-b2-samples/cloudflare-b2/blob/main/index.js and https://github.com/backblaze-b2-samples/cloudflare-b2-proxy/blob/master/index.js by ly65
 
 // Proxy Backblaze S3 compatible API requests, sending notifications to a webhook
 //
@@ -79,7 +79,111 @@ var custom_sign_path=async function(str) {
     return hash5.substr(0, 24);
 };
 
+var aws_region;
+var client;
+
+// Verify the signature on the incoming request
+var verify_signature = async function(request) {
+    var authorization = request.headers.get("Authorization");
+    if(!authorization) {
+        return false;
+    }
+
+    // Parse the AWS V4 signature value
+    var re = new RegExp("^AWS4-HMAC-SHA256 Credential=([^,]+),\\s*SignedHeaders=([^,]+),\\s*Signature=(.+)$");
+    var [, credential, signedHeaders, signature] = authorization.match(re);
+
+    credential = credential.split('/');
+    signedHeaders = signedHeaders.split(';');
+
+    // Verify that the request was signed with the expected key
+    if(credential[0] != settings.B2_APPLICATION_KEY_ID) {
+        throw new Error("application key id not valid");
+    }
+
+    // Use the timestamp from the incoming signature
+    var datetime = request.headers.get("x-amz-date");
+
+    if(!datetime) {
+        throw new Error("datetime not found");
+    }
+
+    // Extract the headers that we want from the complete set of incoming headers
+    var headersToSign = signedHeaders.map(key => ( {
+        "name": key,
+        "value": request.headers.get(key),
+    })).reduce((obj, item) => (obj[item.name] = item.value, obj), {});
+
+    var signedRequest = await client.sign(request.url, {
+        method: request.method,
+        headers: headersToSign,
+        body: request.body,
+        aws: {
+            datetime: datetime,
+            allHeaders: true,
+        },
+    });
+
+    // All we need is the signature component of the Authorization header
+    var [,,, generatedSignature] = signedRequest.headers.get("Authorization").match(re);
+
+    if(signature !== generatedSignature) {
+        throw new Error("signature mismatched");
+    }
+    return true;
+};
+
 var main_handler=async function(request, env) {
+
+    // Variables set in env have higher priority than those in settings
+    settings=Object.assign(settings, env);
+
+    // Extract the region from the endpoint
+    // This should NOT throw an error, unless you set the B2_ENDPOINT wrongly
+    aws_region=settings.B2_ENDPOINT.match(new RegExp("^s3\.([a-zA-Z0-9-]+)\.backblazeb2\.com$"))[1];
+
+    // Create an S3 API client that can sign the outgoing request
+    client=new AwsClient({
+        "accessKeyId": settings.B2_APPLICATION_KEY_ID,
+        "secretAccessKey": settings.B2_APPLICATION_KEY,
+        "sessionToken": null,
+        "service": "s3",
+        "region": aws_region,
+        "cache": null,
+        "retries": null,
+        "initRetryMs": null,
+    });
+
+    // First check if the request is an api request
+    try {
+        // false: not an api request
+        // throw error: is an api request, but cannot verify
+        if(await verify_signature(request) === true) {
+            // Certain headers appear in the incoming request but are
+            // removed from the outgoing request. If they are in the
+            // signed headers, B2 can't validate the signature.
+
+            var url = new URL(request.url);
+            url.hostname = settings.B2_ENDPOINT;
+            // Send the signed request to B2 and wait for the upstream response
+            return fetch(await client.sign(url, {
+                method: request.method,
+                headers: filter_headers(request.headers),
+                body: request.body
+            }));
+        }
+    } catch(e) {
+        return new Response("api request cannot be verified: "+e.message, {
+            status: 500,
+            statusText: null,
+            headers: {
+                "content-type": "text/plain; charset=utf-8",
+                "cache-control": "max-age=0, no-cache, no-store",
+            },
+        });
+    }
+
+    // ...if it's not an api request
 
     // Only allow GET and HEAD methods
     if(!["GET", "HEAD"].includes(request.method)) {
@@ -91,9 +195,6 @@ var main_handler=async function(request, env) {
             },
         });
     }
-
-    // Variables set in env have higher priority than those in settings
-    settings=Object.assign(settings, env);
 
     var url=new URL(request.url);
 
@@ -179,22 +280,6 @@ var main_handler=async function(request, env) {
     // are removed from the outgoing request. If they are in the outgoing
     // signed headers, B2 can't validate the signature.
     var headers=filter_headers(request.headers);
-
-    // Extract the region from the endpoint
-    // This should NOT throw an error, unless you set the B2_ENDPOINT wrongly
-    var aws_region=settings.B2_ENDPOINT.match(new RegExp("^s3\.([a-zA-Z0-9-]+)\.backblazeb2\.com$"))[1];
-
-    // Create an S3 API client that can sign the outgoing request
-    var client=new AwsClient({
-        "accessKeyId": settings.B2_APPLICATION_KEY_ID,
-        "secretAccessKey": settings.B2_APPLICATION_KEY,
-        "sessionToken": null,
-        "service": "s3",
-        "region": aws_region,
-        "cache": null,
-        "retries": null,
-        "initRetryMs": null,
-    });
 
     // Sign the outgoing request
     var signed_request=await client.sign(url.toString(), {

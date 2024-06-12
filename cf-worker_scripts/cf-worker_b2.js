@@ -200,6 +200,17 @@ var main_handler=async function(request, env) {
 
     var url=new URL(request.url);
 
+    if(url.headers.has("range")&&!url.headers.get("range").match(new RegExp("^bytes=(d+)-(d+)?$"))) {
+        return new Response("Range Not Satisfiable", {
+            status: 416,
+            statusText: null,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=300",
+            },
+        });
+    }
+
     // Incoming protocol and port is taken from the worker's environment.
     // Local dev mode uses plain http on 8787, and it's possible to deploy
     // a worker on plain http. B2 only supports https on 443
@@ -220,6 +231,7 @@ var main_handler=async function(request, env) {
     }
     path=path.replace(new RegExp("\/$"), "");
 
+    // To ensure the signed results are the same
     path=decodeURIComponent(path);
 
     // Split the path into segments
@@ -258,7 +270,7 @@ var main_handler=async function(request, env) {
             statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=21600, immutable",
+                "Cache-Control": "public, max-age=21600",
             },
         });
     }
@@ -367,9 +379,27 @@ var main_handler=async function(request, env) {
         });
     }
 
+    var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
+    var mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
+    var file_name=(url.searchParams.has("fn")?url.searchParams.get("fn"):null);
+
+    if(force_download===null||force_download=="0"||force_download.toLowerCase()=="false") {
+        force_download=false;
+    } else {
+        force_download=true;
+    }
+
+    if(mime===null&&ret.headers.has("content-type")) {
+        mime=ret.headers.get("content-type");
+    }
+
     var ret_hd=new Headers(ret.headers);
     ret_hd.set("Access-Control-Allow-Origin", "*");
     ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
+    ret_hd.set("Content-Type", mime);
+    if(force_download) {
+        ret_hd.set("Content-Disposition", "attachment"+(file_name===null?"":"; filename="+JSON.stringify(file_name)));
+    }
 
     if(ret.status != 200 && ret.status != 206) {
         ret_hd.set("Cache-Control", "public, max-age=300");

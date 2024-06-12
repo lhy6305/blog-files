@@ -14,7 +14,7 @@
 <nav class="nav-extended">
     <div class="nav-wrapper container">
         <a href="/@s3manager/buckets/{{$.BucketName}}" class="brand-logo center"><i class="material-icons">folder_open</i>{{ .BucketName }}</a>
-        {{ if not .Objects }}
+        {{ if not .Objects }}{{ if $.AllowDeleteBucket }}
         <ul class="right">
             <li>
                 <a class="waves-effect waves-light btn" href="#" onclick="deleteBucket({{ .BucketName }})">
@@ -22,7 +22,7 @@
                 </a>
             </li>
         </ul>
-        {{ end }}
+        {{ end }}{{ end }}
     </div>
 
     <div class="nav-wrapper container">
@@ -147,7 +147,7 @@
                 <h4>Create download link for </h4>
                 <input name="objectName" id="objectName" type="text" readonly>
             </div>
-            <div class="row">
+            <!-- <div class="row">
                 <div class="col s4">
                     <div class="input-field">
                         <input name="day" id="gen-link-day" value="0" type="text" pattern="^[\d]+$" class="validate">
@@ -169,7 +169,7 @@
                         <span class="helper-text" data-error="Invalid minute format"></span>
                     </div>
                 </div>
-            </div>
+            </div> -->
             <div class="row">
                 <div class="col s3">
                     <button id="create-link-btn" class="waves-effect waves-green btn">Create link</button>
@@ -310,6 +310,7 @@ function handleGenerateDownloadLink(event) {
     });
 }
 
+/*
 function handleCopyLink() {
     const url = document.getElementById("generated-link").value;
 
@@ -320,6 +321,46 @@ function handleCopyLink() {
             console.error('Could not copy:', err);
         });
     }
+}
+*/
+
+function handleCopyLink() {
+    var url = document.getElementById("generated-link").value;
+
+    if(!url) {
+        M.toast({html: 'URL is empty!'});
+        return;
+    }
+    if (window.clipboardData) { // for IE only
+        window.clipboardData.setData('Text', url);
+        M.toast({html: 'Copied to clipboard!'});
+        return;
+    }
+    var textArea = document.createElement("textarea");
+    textArea.value = url;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    textArea.readOnly = true;
+    try {
+        textArea.setAttribute("readonly", "readonly");
+    } catch {}
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    var msg = 'Could not copy';
+    try {
+        var successful = document.execCommand('copy');
+        if (successful) {
+            msg = 'Copied to clipboard!';
+        }
+    } catch (err) {
+        console.error(err);
+        msg += ": " + err;
+    }
+    document.body.removeChild(textArea);
+    M.toast({html: msg});
 }
 
 window.onload = (event) => {

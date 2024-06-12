@@ -32,7 +32,10 @@ type configuration struct {
 	AccessKeyID            string
 	SecretAccessKey        string
 	Region                 string
+	AllowCreate            bool
+	AllowCreateBucket      bool
 	AllowDelete            bool
+	AllowDeleteBucket      bool
 	ForceDownload          bool
 	UseSSL                 bool
 	SkipSSLVerification    bool
@@ -80,8 +83,17 @@ func parseConfiguration() configuration {
 
 	region := viper.GetString("REGION")
 
+	viper.SetDefault("ALLOW_CREATE", true)
+	allowCreate := viper.GetBool("ALLOW_CREATE")
+
+	viper.SetDefault("ALLOW_CREATE_BUCKET", false)
+	allowCreateBucket := viper.GetBool("ALLOW_CREATE_BUCKET")
+
 	viper.SetDefault("ALLOW_DELETE", true)
 	allowDelete := viper.GetBool("ALLOW_DELETE")
+
+	viper.SetDefault("ALLOW_DELETE_BUCKET", false)
+	allowDeleteBucket := viper.GetBool("ALLOW_DELETE_BUCKET")
 
 	viper.SetDefault("FORCE_DOWNLOAD", true)
 	forceDownload := viper.GetBool("FORCE_DOWNLOAD")
@@ -117,7 +129,10 @@ func parseConfiguration() configuration {
 		AccessKeyID:            accessKeyID,
 		SecretAccessKey:        secretAccessKey,
 		Region:                 region,
+		AllowCreate:            allowCreate,
+		AllowCreateBucket:      allowCreateBucket,
 		AllowDelete:            allowDelete,
+		AllowDeleteBucket:      allowDeleteBucket,
 		ForceDownload:          forceDownload,
 		UseSSL:                 useSSL,
 		SkipSSLVerification:    skipSSLVerification,
@@ -187,19 +202,23 @@ func main() {
 	r := mux.NewRouter()
 	r.Handle("/", http.RedirectHandler("/buckets", http.StatusPermanentRedirect)).Methods(http.MethodGet)
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.FS(statics)))).Methods(http.MethodGet)
-	r.Handle("/buckets", s3manager.HandleBucketsView(s3, templates, configuration.AllowDelete)).Methods(http.MethodGet)
-	r.PathPrefix("/buckets/").Handler(s3manager.HandleBucketView(s3, templates, configuration.AllowDelete, configuration.ListRecursive)).Methods(http.MethodGet)
-	r.Handle("/api/buckets", s3manager.HandleCreateBucket(s3)).Methods(http.MethodPost)
-	if configuration.AllowDelete {
-		r.Handle("/api/buckets/{bucketName}", s3manager.HandleDeleteBucket(s3)).Methods(http.MethodDelete)
+	r.Handle("/buckets", s3manager.HandleBucketsView(s3, templates, configuration.AllowDeleteBucket)).Methods(http.MethodGet)
+	r.PathPrefix("/buckets/").Handler(s3manager.HandleBucketView(s3, templates, configuration.AllowDelete, configuration.AllowDeleteBucket, configuration.ListRecursive)).Methods(http.MethodGet)
+	if configuration.AllowCreate {
+		r.Handle("/api/buckets/{bucketName}/objects", s3manager.HandleCreateObject(s3, sseType)).Methods(http.MethodPost)
 	}
-	r.Handle("/api/buckets/{bucketName}/objects", s3manager.HandleCreateObject(s3, sseType)).Methods(http.MethodPost)
-	//r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}/url", s3manager.HandleGenerateUrl(s3)).Methods(http.MethodGet)
-	r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}/url", s3manager.HandleCustomGenerateUrl(configuration.Endpoint, configuration.CustomEndpointSignSalt)).Methods(http.MethodGet)
-	r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}", s3manager.HandleGetObject(s3, configuration.ForceDownload)).Methods(http.MethodGet)
+	if configuration.AllowCreateBucket {
+		r.Handle("/api/buckets", s3manager.HandleCreateBucket(s3)).Methods(http.MethodPost)
+	}
 	if configuration.AllowDelete {
 		r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}", s3manager.HandleDeleteObject(s3)).Methods(http.MethodDelete)
 	}
+	if configuration.AllowDeleteBucket {
+		r.Handle("/api/buckets/{bucketName}", s3manager.HandleDeleteBucket(s3)).Methods(http.MethodDelete)
+	}
+	//r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}/url", s3manager.HandleGenerateUrl(s3)).Methods(http.MethodGet)
+	r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}/url", s3manager.HandleCustomGenerateUrl(configuration.Endpoint, configuration.CustomEndpointSignSalt)).Methods(http.MethodGet)
+	r.Handle("/api/buckets/{bucketName}/objects/{objectName:.*}", s3manager.HandleGetObject(s3, configuration.ForceDownload)).Methods(http.MethodGet)
 
 	lr := logging.Handler(os.Stdout)(r)
 	srv := &http.Server{

@@ -217,9 +217,6 @@ var main_handler=async function(request, env) {
     url.protocol="https:";
     url.port="443";
 
-    // Remove query params
-    url.search="";
-
     // Trim multiple slashes
     var path=url.pathname.replace(new RegExp("\/{2,}", "g"), "/");
     // Remove leading slashes from path
@@ -295,10 +292,17 @@ var main_handler=async function(request, env) {
     // Bucket name is specified in the BUCKET_NAME variable
     url.hostname=settings.BUCKET_NAME + "." + settings.B2_ENDPOINT;
 
+    var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
+    var custom_mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
+    var custom_file_name=(url.searchParams.has("fn")?url.searchParams.get("fn"):null);
+
     // Certain headers, such as x-real-ip, appear in the incoming request but
     // are removed from the outgoing request. If they are in the outgoing
     // signed headers, B2 can't validate the signature.
     var headers=filter_headers(request.headers);
+
+    // Remove query params before sign
+    url.search="";
 
     // Sign the outgoing request
     var signed_request=await client.sign(url.toString(), {
@@ -379,26 +383,22 @@ var main_handler=async function(request, env) {
         });
     }
 
-    var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
-    var mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
-    var file_name=(url.searchParams.has("fn")?url.searchParams.get("fn"):null);
-
     if(force_download===null||force_download=="0"||force_download.toLowerCase()=="false") {
         force_download=false;
     } else {
         force_download=true;
     }
 
-    if(mime===null&&ret.headers.has("content-type")) {
-        mime=ret.headers.get("content-type");
+    if(custom_mime===null&&ret.headers.has("content-type")) {
+        custom_mime=ret.headers.get("content-type");
     }
 
     var ret_hd=new Headers(ret.headers);
     ret_hd.set("Access-Control-Allow-Origin", "*");
     ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
-    ret_hd.set("Content-Type", mime);
+    ret_hd.set("Content-Type", custom_mime);
     if(force_download) {
-        ret_hd.set("Content-Disposition", "attachment"+(file_name===null?"":"; filename="+JSON.stringify(file_name)));
+        ret_hd.set("Content-Disposition", "attachment"+(custom_file_name===null?"":"; filename="+JSON.stringify(custom_file_name)));
     }
 
     if(ret.status != 200 && ret.status != 206) {

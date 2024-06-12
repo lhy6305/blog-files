@@ -10,7 +10,7 @@
   "_comment-SIGNATURE_TYPE": ["valid values are:", "V2", "V4", "V4Streaming", "Anonymous"],
   "ADDR": ":8080",
   "_comment-ADDR": "webui listen address",
-  "ALLOW_DELETE": true,
+  "ALLOW_DELETE": false,
   "FORCE_DOWNLOAD": true,
   "LIST_RECURSIVE": false,
   "USE_IAM": false,

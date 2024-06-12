@@ -200,7 +200,7 @@ var main_handler=async function(request, env) {
 
     var url=new URL(request.url);
 
-    if(url.headers.has("range")&&!url.headers.get("range").match(new RegExp("^bytes=(d+)-(d+)?$"))) {
+    if(request.headers.has("range")&&!request.headers.get("range").match(new RegExp("^bytes=(d+)-(d+)?$"))) {
         return new Response("Range Not Satisfiable", {
             status: 416,
             statusText: null,

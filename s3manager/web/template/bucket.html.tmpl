@@ -331,11 +331,32 @@ function handleCopyLink() {
         M.toast({html: 'URL is empty!'});
         return;
     }
-    if (window.clipboardData) { // for IE only
+    if(window.clipboardData) {  // for IE only
         window.clipboardData.setData('Text', url);
         M.toast({html: 'Copied to clipboard!'});
         return;
     }
+
+    var msg = 'Could not copy';
+    if(window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText) {
+        // works in modern browsers
+        try {
+            window.navigator.clipboard.writeText(url).then(function() {
+                msg = 'Copied to clipboard!';
+                M.toast({html: msg});
+            }, function(err) {
+                console.error(err);
+                msg += ": " + err;
+                M.toast({html: msg});
+            });
+        } catch(err) {
+            console.error(err);
+            msg += ": " + err;
+            M.toast({html: msg});
+        }
+        return;
+    }
+    // use the fallback method
     var textArea = document.createElement("textarea");
     textArea.value = url;
     textArea.style.top = "0";
@@ -349,13 +370,12 @@ function handleCopyLink() {
     textArea.focus();
     textArea.select();
 
-    var msg = 'Could not copy';
     try {
         var successful = document.execCommand('copy');
-        if (successful) {
+        if(successful) {
             msg = 'Copied to clipboard!';
         }
-    } catch (err) {
+    } catch(err) {
         console.error(err);
         msg += ": " + err;
     }

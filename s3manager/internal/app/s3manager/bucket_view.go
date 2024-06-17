@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/facette/natsort"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -65,6 +67,9 @@ func HandleBucketView(s3 S3, templates fs.FS, allowDelete bool, allowDeleteBucke
 			}
 			objs = append(objs, obj)
 		}
+		sort.Slice(objs, func(i, j int) bool {
+			return natsort.Compare(objs[i].Key, objs[j].Key)
+		})
 		data := pageData{
 			BucketName:        bucketName,
 			Objects:           objs,

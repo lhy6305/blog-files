@@ -243,12 +243,15 @@ function uploadFiles(files, url) {
 
 function uploadFile(file, url) {
     const formData = new FormData();
-    formData.append('file', file);
     if( !!file.webkitRelativePath ) {
         formData.append('path', "{{ .CurrentPath }}" + file.webkitRelativePath );
     } else {
         formData.append('path', "{{ .CurrentPath }}" + file.name );
     }
+    formData.append('size', file.size);
+
+    // add the file content at the end for server multi-part parsing
+    formData.append('file', file);
 
     const notification = createNotification(file.name);
     notifications = document.getElementById('notifications');

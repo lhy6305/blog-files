@@ -16,7 +16,8 @@ func HandleCreateObject(s3 S3, sseInfo SSEType) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bucketName := mux.Vars(r)["bucketName"]
 
-		err := r.ParseMultipartForm(500 * (1 << 20)) // 500M Bytes
+		//err := r.ParseMultipartForm(500 * (1 << 20)) // 500M Bytes
+		err := r.ParseMultipartForm(0) // Write all files(>10M) to disk
 		if err != nil {
 			handleHTTPError(w, fmt.Errorf("error parsing multipart form: %w", err))
 			return

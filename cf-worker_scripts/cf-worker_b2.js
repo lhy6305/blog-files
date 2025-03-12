@@ -193,6 +193,7 @@ var main_handler=async function(request, env) {
             statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD",
                 "Cache-Control": "public, max-age=300",
             },
         });

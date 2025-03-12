@@ -1,9 +1,32 @@
-addEventListener("fetch", event => {
-    event.respondWith(handleRequest(event.request))
-})
+var settings= {
+    "ALLOWED_HEADERS": [
+        "content-type",
+        "date",
+        "host",
+        "if-match",
+        "if-modified-since",
+        "if-none-match",
+        "if-unmodified-since",
+        "range",
+    ],
+    "RANGE_RETRY_ATTEMPTS": 3,
+    "REQUEST_TIMEOUT": 3*1000
+};
 
-async function handleRequest(request) {
+// Filter out cf-* and any other headers we don't want to include in the request
+var filter_headers=function(headers) {
+    return new Headers(Array.from(headers.entries()).filter(function(pair) {
+        if(pair[0].startsWith("cf-")) {
+            return false;
+        }
+        if(("ALLOWED_HEADERS" in settings) && settings.ALLOWED_HEADERS.includes(pair[0])) {
+            return false;
+        }
+        return true;
+    }));
+}
 
+var main_handler=async function(request, env) {
     if(request.method == "OPTIONS") {
         var hd = new Headers();
         hd.append("Access-Control-Allow-Origin", "*");
@@ -21,6 +44,7 @@ async function handleRequest(request) {
     if(["GET", "HEAD"].indexOf(request.method) == -1) {
         var hd = new Headers();
         hd.append("Access-Control-Allow-Origin", "*");
+        hd.append("Access-Control-Allow-Methods", "HEAD, GET, OPTIONS");
         hd.append("Access-Control-Max-Age", "600")
         hd.append("Content-Type", "text/plain");
         return new Response("only HEAD,GET,OPTIONS methods are allowed", {
@@ -69,24 +93,142 @@ async function handleRequest(request) {
     }
 
     url.protocol = "https";
-    //url.hostname = "raw.githubusercontent.com";
-    //url.pathname = "/lhy6305/blog-files/main/"+url.pathname;
-    url.hostname = "cdn.jsdelivr.net";
-    url.pathname = "/gh/lhy6305/blog-files@main/"+url.pathname;
+    url.hostname = "raw.githubusercontent.com";
+    url.pathname = "/lhy6305/blog-files/refs/heads/main/"+url.pathname;
+    //url.hostname = "cdn.jsdelivr.net";
+    //url.hostname = "fastly.jsdelivr.net";
+    //url.pathname = "/gh/lhy6305/blog-files@main/"+url.pathname;
     url.pathname = url.pathname.replaceAll("//", "/");
 
-    let fetchOptions = {
-        method: request.method,
-        headers: request.headers,
-        body: request.method === "GET" ? undefined : request.body,
-    };
+    var req_headers=filter_headers(request.headers);
 
-    let originalResponse = await fetch(url, fetchOptions);
+    var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
+    var custom_mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
+    var custom_file_name=(url.searchParams.has("fn")?url.searchParams.get("fn"):null);
 
-    let responseOptions = {
-        status: originalResponse.status,
-        headers: originalResponse.headers,
-    };
+    // Remove all url.searchParams
+    Object.keys(url.searchParams).map(function(key) {
+        url.searchParams.delete(key);
+    });
 
-    return new Response(originalResponse.body, responseOptions);
-}
+    console.log("modified request url: "+url.toString());
+
+    // For large files, Cloudflare will return the entire file, rather than the requested range
+    // So, if there is a range header in the request, check that the response contains the
+    // content-range header. If not, abort the request and try again.
+    // See https://community.cloudflare.com/t/cloudflare-worker-fetch-ignores-byte-request-range-on-initial-request/395047/4
+    var ret;
+    if(req_headers.has("range")) {
+        var attempts=settings.RANGE_RETRY_ATTEMPTS;
+        var response;
+        do {
+            var controller=new AbortController();
+            var request_timeout=null;
+            if(settings.REQUEST_TIMEOUT>0) {
+                request_timeout=setTimeout(function() {
+                    controller.abort();
+                    console.error("request cancelled due to timeout after"+settings.REQUEST_TIMEOUT.toString()+"ms");
+                }, settings.REQUEST_TIMEOUT);
+            }
+            response=await fetch(url, {
+                method: request.method,
+                headers: req_headers,
+                signal: controller.signal,
+                cf: {
+                    cacheEverything: true,
+                    cacheTtlByStatus: {
+                        "200-299": 129600,
+                        404: 300,
+                    },
+                }
+            });
+            if(request_timeout!==null) {
+                clearTimeout(request_timeout);
+                request_timeout=null;
+            }
+            if(response.headers.has("content-range")) {
+                // Only log if it didn't work first time
+                if(attempts < settings.RANGE_RETRY_ATTEMPTS) {
+                    console.log("Retry for "+url+" succeeded - response has content-range header");
+                }
+                // Break out of loop and return the response
+                break;
+            } else if(response.ok) {
+                attempts -= 1;
+                console.error("Range header in request for "+url+" but no content-range header in response. Will retry "+attempts+" more times");
+                //if(attempts > 0) {
+                // Do not abort on the last attempt, as we want to return the response
+                // Just abort it. I want to have an error response.
+                controller.abort();
+                //}
+            } else {
+                // Response is not ok, so don't retry
+                break;
+            }
+        } while(attempts > 0);
+
+        if(attempts <= 0) {
+            console.error("Tried range request for "+request.url+" "+settings.RANGE_RETRY_ATTEMPTS+" times, but no content-range in response.");
+            if(response.ok) {
+                return new Response("An unexpected backend error occured. Please contact the admin.", {
+                    status: 500,
+                    statusText: null,
+                    headers: {
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=300",
+                    },
+                });
+            }
+        }
+
+        // Return whatever response we have rather than an error response
+        // This response cannot be aborted, otherwise it will raise an exception
+        ret=response;
+    } else {
+        // Send the request and return the upstream response
+        ret=await fetch(url, {
+            cf: {
+                cacheEverything: true,
+                cacheTtlByStatus: {
+                    "200-299": 129600,
+                    404: 300,
+                },
+            }
+        });
+    }
+
+    console.log("request successful");
+
+    if(((typeof force_download)=="string")&&force_download.length>0&&force_download.toLowerCase()!="false") {
+        force_download=true;
+    } else {
+        force_download=false;
+    }
+
+    if(custom_mime===null&&ret.headers.has("content-type")) {
+        custom_mime=ret.headers.get("content-type");
+    }
+
+    var ret_hd=new Headers(ret.headers);
+    ret_hd.set("Access-Control-Allow-Origin", "*");
+    ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
+    ret_hd.set("Content-Type", custom_mime);
+    if(force_download) {
+        ret_hd.set("Content-Disposition", "attachment"+(custom_file_name===null?"":"; filename="+JSON.stringify(custom_file_name)));
+    }
+
+    if(ret.status != 200 && ret.status != 206) {
+        ret_hd.set("Cache-Control", "public, max-age=300");
+    }
+    return new Response(ret.body, {
+        status: ret.status,
+        statusText: ret.statusText,
+        headers: ret_hd,
+    });
+};
+
+export default {
+    async fetch(request, env) {
+        return main_handler(request, env);
+    },
+};

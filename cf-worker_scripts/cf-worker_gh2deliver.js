@@ -1,5 +1,5 @@
 var settings= {
-    "ALLOWED_HEADERS": [
+    "REQUEST_ALLOWED_HEADERS": [
         "content-type",
         "date",
         "host",
@@ -9,22 +9,44 @@ var settings= {
         "if-unmodified-since",
         "range",
     ],
+    "RESPONSE_ALLOWED_HEADERS": [
+        "access-control-allow-origin",
+        "cache-control",
+        "cf-cache-status",
+        "cf-ray",
+        "content-encoding",
+        "content-type",
+        "date",
+        "etag",
+        "expires",
+        "x-cache",
+        "x-cache-hits",
+    ],
     "RANGE_RETRY_ATTEMPTS": 3,
     "REQUEST_TIMEOUT": 3*1000
 };
 
 // Filter out cf-* and any other headers we don't want to include in the request
-var filter_headers=function(headers) {
+var filter_req_headers=function(headers) {
     return new Headers(Array.from(headers.entries()).filter(function(pair) {
         if(pair[0].startsWith("cf-")) {
             return false;
         }
-        if(("ALLOWED_HEADERS" in settings) && settings.ALLOWED_HEADERS.includes(pair[0])) {
+        if(("REQUEST_ALLOWED_HEADERS" in settings) && settings.REQUEST_ALLOWED_HEADERS.includes(pair[0])) {
             return false;
         }
         return true;
     }));
-}
+};
+
+var filter_resp_headers=function(headers) {
+    return new Headers(Array.from(headers.entries()).filter(function(pair) {
+        if(("RESPONSE_ALLOWED_HEADERS" in settings) && settings.RESPONSE_ALLOWED_HEADERS.includes(pair[0])) {
+            return false;
+        }
+        return true;
+    }));
+};
 
 var main_handler=async function(request, env) {
     if(request.method == "OPTIONS") {
@@ -120,7 +142,7 @@ var main_handler=async function(request, env) {
     //url.pathname = "/gh/"+target_repository_name+"@"+target_branch_name+"/"+url.pathname;
     url.pathname = url.pathname.replaceAll("//", "/");
 
-    var req_headers=filter_headers(request.headers);
+    var req_headers=filter_req_headers(request.headers);
 
     var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
     var custom_mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
@@ -229,7 +251,7 @@ var main_handler=async function(request, env) {
         custom_mime=ret.headers.get("content-type");
     }
 
-    var ret_hd=new Headers(ret.headers);
+    var ret_hd=filter_resp_headers(ret.headers);
     ret_hd.set("Access-Control-Allow-Origin", "*");
     ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
     ret_hd.set("Content-Type", custom_mime);

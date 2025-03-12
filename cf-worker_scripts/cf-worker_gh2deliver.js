@@ -12,8 +12,6 @@ var settings= {
     "RESPONSE_ALLOWED_HEADERS": [
         "access-control-allow-origin",
         "cache-control",
-        "cf-cache-status",
-        "cf-ray",
         "content-encoding",
         "content-type",
         "date",
@@ -41,6 +39,9 @@ var filter_resp_headers=function(headers) {
     return new Headers(Array.from(headers.entries()).filter(function(pair) {
         if(("RESPONSE_ALLOWED_HEADERS" in settings) && settings.RESPONSE_ALLOWED_HEADERS.includes(pair[0])) {
             return true;
+        }
+        if(pair[0].startsWith("cf-")) {
+            return false;
         }
         return false;
     }));

@@ -92,12 +92,32 @@ var main_handler=async function(request, env) {
         });
     }
 
+    var target_repository_name=(url.searchParams.has("repo")?url.searchParams.get("repo"):"lhy6305/blog-files");
+    var target_branch_name=(url.searchParams.has("tree")?url.searchParams.get("tree"):"main");
+
+    // Validity check for repo and tree provided by user
+
+    if(!new RegExp("^[0-9a-zA-Z\\-_\\.]{1,100}/[0-9a-zA-Z\\-_\\.]{1,100}$", "i").test(target_repository_name) || new RegExp("\\.\\.", "ig").test(target_repository_name) || !new RegExp("^[^\\x00-\\x1F\\x7F\\\\/]+$", "i").test(target_branch_name) || new RegExp("\\.\\.", "ig").test(target_branch_name)) {
+        var hd = new Headers();
+        hd.append("Access-Control-Allow-Origin", "*");
+        hd.append("Cache-Control", "no-store; must-revalidate");
+        hd.append("Content-Type", "text/plain");
+        return new Response("Invalid Repository or Branch Name", {
+            status: 400,
+            statusText: null,
+            headers: hd
+        });
+    }
+
+    target_repository_name=encodeURIComponent(target_repository_name);
+    target_branch_name=encodeURIComponent(target_branch_name);
+
     url.protocol = "https";
     url.hostname = "raw.githubusercontent.com";
-    url.pathname = "/lhy6305/blog-files/refs/heads/main/"+url.pathname;
+    url.pathname = "/"+target_repository_name+"/refs/heads/"+target_branch_name+"/"+url.pathname;
     //url.hostname = "cdn.jsdelivr.net";
     //url.hostname = "fastly.jsdelivr.net";
-    //url.pathname = "/gh/lhy6305/blog-files@main/"+url.pathname;
+    //url.pathname = "/gh/"+target_repository_name+"@"+target_branch_name+"/"+url.pathname;
     url.pathname = url.pathname.replaceAll("//", "/");
 
     var req_headers=filter_headers(request.headers);

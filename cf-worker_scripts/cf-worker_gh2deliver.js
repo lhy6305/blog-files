@@ -19,8 +19,6 @@ var settings= {
         "date",
         "etag",
         "expires",
-        "x-cache",
-        "x-cache-hits",
     ],
     "RANGE_RETRY_ATTEMPTS": 3,
     "REQUEST_TIMEOUT": 3*1000
@@ -29,22 +27,22 @@ var settings= {
 // Filter out cf-* and any other headers we don't want to include in the request
 var filter_req_headers=function(headers) {
     return new Headers(Array.from(headers.entries()).filter(function(pair) {
+        if(("REQUEST_ALLOWED_HEADERS" in settings) && settings.REQUEST_ALLOWED_HEADERS.includes(pair[0])) {
+            return true;
+        }
         if(pair[0].startsWith("cf-")) {
             return false;
         }
-        if(("REQUEST_ALLOWED_HEADERS" in settings) && settings.REQUEST_ALLOWED_HEADERS.includes(pair[0])) {
-            return false;
-        }
-        return true;
+        return false;
     }));
 };
 
 var filter_resp_headers=function(headers) {
     return new Headers(Array.from(headers.entries()).filter(function(pair) {
         if(("RESPONSE_ALLOWED_HEADERS" in settings) && settings.RESPONSE_ALLOWED_HEADERS.includes(pair[0])) {
-            return false;
+            return true;
         }
-        return true;
+        return false;
     }));
 };
 

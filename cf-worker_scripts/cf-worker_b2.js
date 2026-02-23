@@ -98,7 +98,12 @@ var verify_signature = async function(request) {
 
     // Parse the AWS V4 signature value
     var re = new RegExp("^AWS4-HMAC-SHA256 Credential=([^,]+),\\s*SignedHeaders=([^,]+),\\s*Signature=(.+)$");
-    var [, credential, signedHeaders, signature] = authorization.match(re);
+
+    var matched = authorization.match(re);
+    if(!matched) {
+        throw new Error("unsupported authorization type");
+    }
+    var [, credential, signedHeaders, signature] = matched;
 
     credential = credential.split('/');
     signedHeaders = signedHeaders.split(';');
@@ -132,7 +137,12 @@ var verify_signature = async function(request) {
     });
 
     // All we need is the signature component of the Authorization header
-    var [,,, generatedSignature] = signedRequest.headers.get("Authorization").match(re);
+    var generatedAuthorization = signedRequest.headers.get("Authorization");
+    var generatedMatched = generatedAuthorization && generatedAuthorization.match(re);
+    if(!generatedMatched) {
+        throw new Error("unsupported authorization type");
+    }
+    var [,,, generatedSignature] = generatedMatched;
 
     if(signature !== generatedSignature) {
         throw new Error("signature mismatched");
@@ -160,34 +170,49 @@ var check_ip_rate_limit=async function(request, env) {
         return {ok:true};
     }
     if(!env.IP_RATE_LIMITER) {
-        console.error("IP_RATE_LIMITER binding not found, skip rate limit");
+        console.error("IP_RATE_LIMITER binding not found, skipping rate limit");
         return {ok:true};
     }
     var ip=get_client_ip(request);
     var id=env.IP_RATE_LIMITER.idFromName(ip);
     var stub=env.IP_RATE_LIMITER.get(id);
-    var resp=await stub.fetch("https://rate-limit/check", {
-        method:"POST",
-        headers:{"content-type":"application/json"},
-        body:JSON.stringify({
-            now: Date.now(),
-            windowSec: Number(settings.RATE_LIMIT_WINDOW_SEC||10),
-            maxReq: Number(settings.RATE_LIMIT_MAX_REQ||40),
-            blockSec: Number(settings.RATE_LIMIT_BLOCK_SEC||0),
-        }),
-    });
-    var data=await resp.json().catch(()=>( {
-        ok:false, reason:"invalid_limiter_response"
-    }));
-    if(resp.status===429 || data.ok===false) {
+    var resp=null;
+    try {
+        resp=await stub.fetch("https://rate-limit/check", {
+            method:"POST",
+            headers:{"content-type":"application/json"},
+            body:JSON.stringify({
+                now: Date.now(),
+                windowSec: Number(settings.RATE_LIMIT_WINDOW_SEC||10),
+                maxReq: Number(settings.RATE_LIMIT_MAX_REQ||40),
+                blockSec: Number(settings.RATE_LIMIT_BLOCK_SEC||0),
+            }),
+        });
+        var data=await resp.json().catch(()=>( {
+            ok:false, reason:"invalid_limiter_response"
+        }));
+        if(resp.status===429 || data.ok===false) {
+            return {
+                ok: false,
+                retryAfter: data.retryAfter||1,
+                reason: data.reason||"rate_limited",
+            };
+        }
+        if(resp.status===200 || data.ok===true) {
+            return {
+                ok: true,
+            };
+        }
+    } catch {
         return {
-            ok:false,
-            retryAfter: data.retryAfter||1,
-            reason: data.reason||"rate_limited",
+            ok: true,
+            reason: "limiter_throw_exception",
         };
     }
-    // fallback if DO failed
-    return {ok:true};
+    return {
+        ok: false,
+        reason: "failed_to_parse_limiter_response",
+    };
 };
 
 // next day 00:00:00 UTC timestamp (ms)
@@ -241,7 +266,7 @@ var main_handler=async function(request, env) {
 
     // Extract the region from the endpoint
     // This should NOT throw an error, unless you set the B2_ENDPOINT wrongly
-    aws_region=settings.B2_ENDPOINT.match(new RegExp("^s3\.([a-zA-Z0-9-]+)\.backblazeb2\.com$"))[1];
+    aws_region=settings.B2_ENDPOINT.match(new RegExp("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$"))[1];
 
     // Create an S3 API client that can sign the outgoing request
     client=new AwsClient({
@@ -331,7 +356,14 @@ var main_handler=async function(request, env) {
     path=path.replace(new RegExp("\/$"), "");
 
     // To ensure the signed results are the same
-    path=decodeURIComponent(path);
+    try {
+        path=decodeURIComponent(path);
+    } catch {
+        return new Response("Bad Request", {
+            status: 400,
+            statusText: null,
+        });
+    }
 
     // Split the path into segments
     var path_seg=path.split("/");
@@ -524,14 +556,18 @@ var main_handler=async function(request, env) {
         return build_429_response_from_block_until(blockUntilMs);
     }
 
-    if(variable_is_false(force_download)) {
-        force_download=false;
-    } else {
+    if(variable_is_true(force_download)) {
         force_download=true;
+    } else {
+        force_download=false;
     }
 
     if(custom_mime===null&&ret.headers.has("content-type")) {
         custom_mime=ret.headers.get("content-type");
+    }
+
+    if(custom_mime===null || custom_mime==="null") {
+        custom_mime="application/x-octet-stream";
     }
 
     var ret_hd=new Headers(ret.headers);

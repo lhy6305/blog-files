@@ -5,7 +5,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import { AwsClient } from './aws4fetch.js'
 
-var settings_instance= {
+var settings = {
     "ALLOW_LIST_BUCKET": false,
     "ALLOWED_HEADERS": [
         "content-type",
@@ -113,16 +113,19 @@ var verify_signature = async function(request) {
 
     // Use the timestamp from the incoming signature
     var datetime = request.headers.get("x-amz-date");
-
     if(!datetime) {
-        throw new Error("datetime not found");
+        throw new Error("header x-amz-date not found");
     }
 
     // Extract the headers that we want from the complete set of incoming headers
-    var headersToSign = signedHeaders.map(key => ( {
-        "name": key,
-        "value": request.headers.get(key),
-    })).reduce((obj, item) => (obj[item.name] = item.value, obj), {});
+    var headersToSign = signedHeaders.reduce((obj, key) => {
+        var value = request.headers.get(key);
+        if(value == null) {
+            throw new Error("header "+key+" not found");
+        }
+        obj[key] = value;
+        return obj;
+    }, {});
 
     var signedRequest = await client.sign(request.url, {
         method: request.method,
@@ -351,7 +354,7 @@ var main_handler=async function(request, env) {
 
     // To ensure the signed results are the same
     try {
-        if(path.toLowerCase().contains("%2f")) {
+        if(path.toLowerCase().includes("%2f")) {
             return new Response("Bad Request", {
                 status: 400,
             });

@@ -190,6 +190,50 @@ var check_ip_rate_limit=async function(request, env) {
     return {ok:true};
 };
 
+// next day 00:00:00 UTC timestamp (ms)
+var next_midnight_utc_ts=function() {
+    var now=new Date();
+    var next=new Date(now);
+    next.setUTCHours(24, 0, 0, 0);
+    return next.getTime();
+};
+
+// cache key for "upstream-403 block marker"
+var build_upstream_403_marker_key=function(request) {
+    var u=new URL(request.url);
+    u.searchParams.set("__m", request.method);
+    if(request.headers.has("range")) {
+        u.searchParams.set("__r", request.headers.get("range"));
+    }
+    return new Request(u.toString(), { method: "GET" });
+};
+
+var build_429_response_from_block_until=function(blockUntilMs) {
+    var retryAfterSec=Math.max(1, Math.ceil((blockUntilMs-Date.now())/1000));
+    return new Response("Too Many Requests", {
+        status: 429,
+        statusText: null,
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            // Do not store the 429 response
+            "Cache-Control": "no-store",
+            "Retry-After": String(retryAfterSec),
+            "Content-Type": "text/plain; charset=utf-8",
+        },
+    });
+};
+
+var build_upstream_403_marker_response=function(blockUntilMs) {
+    var ttlSec=Math.max(1, Math.ceil((blockUntilMs-Date.now())/1000));
+    return new Response("", {
+        status: 204,
+        headers: {
+            "x-upstream-403-block-until": String(blockUntilMs),
+            "Cache-Control": "public, max-age="+String(ttlSec),
+        },
+    });
+};
+
 var main_handler=async function(request, env) {
 
     // Variables set in env have higher priority than those in settings
@@ -241,7 +285,7 @@ var main_handler=async function(request, env) {
         });
     }
 
-    // ...if it's not an api request
+    // if it's not an api request
 
     // Only allow GET and HEAD methods
     if(!["GET", "HEAD"].includes(request.method)) {
@@ -350,6 +394,20 @@ var main_handler=async function(request, env) {
     // Bucket name is specified in the BUCKET_NAME variable
     url.hostname=settings.BUCKET_NAME + "." + settings.B2_ENDPOINT;
 
+    // Check cached upstream-403 marker first
+    var edgeCache=caches.default;
+    var upstream403MarkerKey=build_upstream_403_marker_key(request);
+    var cachedMarker=await edgeCache.match(upstream403MarkerKey);
+    if(cachedMarker) {
+        var blockUntilMs=Number(cachedMarker.headers.get("x-upstream-403-block-until")||0);
+        if(blockUntilMs>Date.now()) {
+            return build_429_response_from_block_until(blockUntilMs);
+        } else {
+            // Clean the marker
+            await edgeCache.delete(upstream403MarkerKey);
+        }
+    }
+
     // IP rate limit for public download path
     var limit_result=await check_ip_rate_limit(request, env);
     if(!limit_result.ok) {
@@ -454,6 +512,16 @@ var main_handler=async function(request, env) {
                 },
             }
         });
+    }
+
+    // Upstream 403 => set block marker until next UTC midnight, respond 429 dynamically
+    if(ret.status===403) {
+        var blockUntilMs=next_midnight_utc_ts();
+        await edgeCache.put(
+            upstream403MarkerKey,
+            build_upstream_403_marker_response(blockUntilMs)
+        );
+        return build_429_response_from_block_until(blockUntilMs);
     }
 
     if(variable_is_false(force_download)) {

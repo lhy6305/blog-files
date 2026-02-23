@@ -94,6 +94,10 @@ var verify_signature = async function(request) {
         return false;
     }
 
+    if(!authorization.startsWith("AWS4-HMAC-SHA256")) {
+        return false;
+    }
+
     // Parse the AWS V4 signature value
     var re = new RegExp("^AWS4-HMAC-SHA256 Credential=([^,]+),\\s*SignedHeaders=([^,]+),\\s*Signature=(.+)$");
 
@@ -184,9 +188,9 @@ var check_ip_rate_limit=async function(request, env) {
             headers: {"content-type":"application/json"},
             body: JSON.stringify({
                 now: Date.now(),
-                windowSec: Math.min(Number(settings_instance.RATE_LIMIT_WINDOW_SEC||10), 1),
-                maxReq: Math.min(Number(settings_instance.RATE_LIMIT_MAX_REQ||40), 1),
-                blockSec: Math.min(Number(settings_instance.RATE_LIMIT_BLOCK_SEC||0), 0),
+                windowSec: Math.max(Number(settings_instance.RATE_LIMIT_WINDOW_SEC||10), 1),
+                maxReq: Math.max(Number(settings_instance.RATE_LIMIT_MAX_REQ||40), 1),
+                blockSec: Math.max(Number(settings_instance.RATE_LIMIT_BLOCK_SEC||0), 0),
             }),
         });
         var data=await resp.json().catch(()=>( {
@@ -476,7 +480,7 @@ var main_handler=async function(request, env) {
     // See https://community.cloudflare.com/t/cloudflare-worker-fetch-ignores-byte-request-range-on-initial-request/395047/4
     var ret;
     if(signed_request.headers.has("range")) {
-        var attempts=Math.min(Number(settings_instance.RANGE_RETRY_ATTEMPTS), 1);
+        var attempts=Math.max(Number(settings_instance.RANGE_RETRY_ATTEMPTS), 1);
         var response;
         do {
             var controller=new AbortController();

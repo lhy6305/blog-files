@@ -370,7 +370,7 @@ var main_handler=async function(request, env) {
     }
 
     if(path_seg.length<=0) {
-        return build_error_response("Bucket Mot Found", 404, {
+        return build_error_response("Bucket Not Found", 404, {
             "Cache-Control": "public, max-age=21600",
         });
     }
@@ -390,7 +390,7 @@ var main_handler=async function(request, env) {
     } while(false);
 
     if(error_flag) {
-        return build_error_response("Path Signature Mismatch", 400, {
+        return build_error_response("Path Signature Mismatch", 403, {
             "Cache-Control": "public, max-age=21600",
         });
     }

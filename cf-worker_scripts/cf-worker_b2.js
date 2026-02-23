@@ -106,7 +106,7 @@ var verify_signature = async function(request, settings_instance, client) {
     signedHeaders = signedHeaders.split(';');
 
     // Verify that the request was signed with the expected key
-    if(credential[0] != settings_instance.B2_APPLICATION_KEY_ID) {
+    if(credential[0] !== settings_instance.B2_APPLICATION_KEY_ID) {
         throw new Error("application key id not valid");
     }
 
@@ -226,6 +226,7 @@ var next_midnight_utc_ts=function() {
 // cache key for "upstream-403 block marker"
 var build_upstream_403_marker_key=function(request) {
     var u=new URL(request.url);
+    u.search = "";
     u.searchParams.set("__m", request.method);
     if(request.headers.has("range")) {
         u.searchParams.set("__r", request.headers.get("range"));
@@ -306,7 +307,7 @@ var main_handler=async function(request, env) {
             return fetch(await client.sign(url, {
                 method: request.method,
                 headers: filter_headers(request.headers, settings_instance),
-                body: request.body
+                body: request.clone().body
             }));
         }
     } catch(e) {
@@ -325,7 +326,9 @@ var main_handler=async function(request, env) {
 
     var url=new URL(request.url);
 
-    if(request.headers.has("range")&&!request.headers.get("range").match(new RegExp("^bytes=(\\d+)?-(\\d+)?$"))) {
+    var range=request.headers.get("range");
+
+    if(range&&!(new RegExp("^bytes=(?:\\d+-\\d*|\\d*-\\d+)$")).test(range)) {
         return build_error_response("Range Not Satisfiable", 416, {
             "Cache-Control": "public, max-age=300",
         });
@@ -369,7 +372,7 @@ var main_handler=async function(request, env) {
         }
     }
 
-    if(path_seg.length<=0) {
+    if(path==="" || path_seg[0]==="") {
         return build_error_response("Bucket Not Found", 404, {
             "Cache-Control": "public, max-age=21600",
         });
@@ -418,9 +421,12 @@ var main_handler=async function(request, env) {
         var blockUntilMs=Number(cachedMarker.headers.get("x-upstream-403-block-until")||0);
         if(blockUntilMs>Date.now()) {
             return build_429_response_from_block_until(blockUntilMs);
-        } else {
+        }
+        try {
             // Clean the marker
             await edgeCache.delete(upstream403MarkerKey);
+        } catch(e) {
+            console.error(e);
         }
     }
 
@@ -522,10 +528,14 @@ var main_handler=async function(request, env) {
     // Upstream 403 => set block marker until next UTC midnight, respond 429 dynamically
     if(ret.status===403) {
         var blockUntilMs=next_midnight_utc_ts();
-        await edgeCache.put(
-            upstream403MarkerKey,
-            build_upstream_403_marker_response(blockUntilMs)
-        );
+        try {
+            await edgeCache.put(
+                upstream403MarkerKey,
+                build_upstream_403_marker_response(blockUntilMs)
+            );
+        } catch(e) {
+            console.error(e);
+        }
         return build_429_response_from_block_until(blockUntilMs);
     }
 
@@ -546,12 +556,16 @@ var main_handler=async function(request, env) {
     var ret_hd=new Headers(ret.headers);
     ret_hd.set("Access-Control-Allow-Origin", "*");
     ret_hd.set("Cache-Control", "public, max-age=21600, immutable");
-    ret_hd.set("Content-Type", custom_mime);
+    try {
+        ret_hd.set("Content-Type", custom_mime);
+    } catch {
+        ret_hd.set("Content-Type", "application/x-octet-stream");
+    }
     if(force_download) {
         ret_hd.set("Content-Disposition", "attachment"+(custom_file_name===null?"":"; filename="+JSON.stringify(custom_file_name)));
     }
 
-    if(ret.status != 200 && ret.status != 206) {
+    if(ret.status !== 200 && ret.status !== 206) {
         ret_hd.set("Cache-Control", "public, max-age=300");
     }
     return new Response(ret.body, {
@@ -581,9 +595,9 @@ export class IPRateLimiterDO extends DurableObject {
 
         var cfg = await request.json().catch(()=>( {}));
         var now = Number(cfg.now)||Date.now();
-        var windowMs = (Number(cfg.windowSec)||10)*1000;
-        var maxReq = Number(cfg.maxReq)||40;
-        var blockMs = (Number(cfg.blockSec)||0)*1000;
+        var windowMs = Math.max(Number(cfg.windowSec)||10, 1)*1000;
+        var maxReq = Math.max(Number(cfg.maxReq)||40, 1);
+        var blockMs = Math.max((Number(cfg.blockSec)||0), 0)*1000;
 
         var data = await this.state.storage.get("d");
         if(!data) {

@@ -5,7 +5,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import { AwsClient } from './aws4fetch.js'
 
-var settings = {
+const settings = {
     "ALLOW_LIST_BUCKET": false,
     "ALLOWED_HEADERS": [
         "content-type",
@@ -37,21 +37,19 @@ var settings = {
     // CUSTOM_PATH_SIGN_KEY0, CUSTOM_PATH_SIGN_KEY1
 };
 
-var settings_instance= {};
-
-var UNSIGNABLE_HEADERS=[
-                           // These headers appear in the request, but are not passed upstream
-                           "x-forwarded-proto",
-                           "x-real-ip",
-                           // We can't include accept-encoding in the signature because Cloudflare
-                           // sets the incoming accept-encoding header to "gzip, br", then modifies
-                           // the outgoing request to set accept-encoding to "gzip".
-                           // Not cool, Cloudflare!
-                           "accept-encoding",
-                       ];
+const UNSIGNABLE_HEADERS = [
+                               // These headers appear in the request, but are not passed upstream
+                               "x-forwarded-proto",
+                               "x-real-ip",
+                               // We can't include accept-encoding in the signature because Cloudflare
+                               // sets the incoming accept-encoding header to "gzip, br", then modifies
+                               // the outgoing request to set accept-encoding to "gzip".
+                               // Not cool, Cloudflare!
+                               "accept-encoding",
+                           ];
 
 // Filter out cf-* and any other headers we don't want to include in the signature
-var filter_headers=function(headers) {
+var filter_headers=function(headers, settings_instance) {
     return new Headers(Array.from(headers.entries()).filter(pair =>
                        !UNSIGNABLE_HEADERS.includes(pair[0])
                        && !pair[0].startsWith("cf-")
@@ -72,7 +70,7 @@ var hash_func=async function(algo, str) {
     return arraybuffer2hex(await crypto.subtle.digest(algo, new TextEncoder().encode(str)));
 };
 
-var custom_sign_path=async function(str) {
+var custom_sign_path=async function(str, settings_instance) {
     if(!("CUSTOM_PATH_SIGN_SALT" in settings_instance)||typeof settings_instance.CUSTOM_PATH_SIGN_SALT!=="string"||settings_instance.CUSTOM_PATH_SIGN_SALT.length<=0) {
         throw new Error("CUSTOM_PATH_SIGN_SALT not set");
     }
@@ -84,11 +82,8 @@ var custom_sign_path=async function(str) {
     return hash5.slice(0, 24);
 };
 
-var aws_region;
-var client;
-
 // Verify the signature on the incoming request
-var verify_signature = async function(request) {
+var verify_signature = async function(request, settings_instance, client) {
     var authorization = request.headers.get("Authorization");
     if(!authorization) {
         return false;
@@ -170,7 +165,7 @@ var get_client_ip=function(request) {
     return "0.0.0.0";
 };
 
-var check_ip_rate_limit=async function(request, env) {
+var check_ip_rate_limit=async function(request, env, settings_instance) {
     if(!variable_is_true(settings_instance.ENABLE_IP_RATE_LIMIT)) {
         return {ok: true};
     }
@@ -263,17 +258,29 @@ var build_upstream_403_marker_response=function(blockUntilMs) {
     });
 };
 
+var build_error_response=function(message, status, extraHeaders) {
+    var headers=new Headers({
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "max-age=0, no-cache, no-store",
+    });
+    if(extraHeaders) {
+        Object.keys(extraHeaders).forEach(k => headers.set(k, extraHeaders[k]));
+    }
+    return new Response(message, { status: status, headers: headers });
+};
+
 var main_handler=async function(request, env) {
 
     // Variables set in env have higher priority than those in settings_instance
-    settings_instance=Object.assign(settings, env);
+    var settings_instance=Object.assign({}, settings, env);
 
     // Extract the region from the endpoint
     // This should NOT throw an error, unless you set the B2_ENDPOINT wrongly
-    aws_region=settings_instance.B2_ENDPOINT.match(new RegExp("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$"))[1];
+    var aws_region=settings_instance.B2_ENDPOINT.match(new RegExp("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$"))[1];
 
     // Create an S3 API client that can sign the outgoing request
-    client=new AwsClient({
+    var client=new AwsClient({
         "accessKeyId": settings_instance.B2_APPLICATION_KEY_ID,
         "secretAccessKey": settings_instance.B2_APPLICATION_KEY,
         "sessionToken": null,
@@ -288,7 +295,7 @@ var main_handler=async function(request, env) {
     try {
         // false: not an api request
         // throw error: is an api request, but cannot verify
-        if(await verify_signature(request) === true) {
+        if(await verify_signature(request, settings_instance, client) === true) {
             // Certain headers appear in the incoming request but are
             // removed from the outgoing request. If they are in the
             // signed headers, B2 can't validate the signature.
@@ -298,44 +305,29 @@ var main_handler=async function(request, env) {
             // Send the signed request to B2 and wait for the upstream response
             return fetch(await client.sign(url, {
                 method: request.method,
-                headers: filter_headers(request.headers),
+                headers: filter_headers(request.headers, settings_instance),
                 body: request.body
             }));
         }
     } catch(e) {
-        return new Response("api request cannot be verified: "+e.message, {
-            status: 400,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Content-Type": "text/plain; charset=utf-8",
-                "Cache-Control": "max-age=0, no-cache, no-store",
-            },
-        });
+        return build_error_response("api request cannot be verified: "+e.message, 400);
     }
 
     // if it's not an api request
 
     // Only allow GET and HEAD methods
     if(!["GET", "HEAD"].includes(request.method)) {
-        return new Response("Method Not Allowed", {
-            status: 405,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, HEAD",
-                "Cache-Control": "public, max-age=300",
-            },
+        return build_error_response("Method Not Allowed", 405, {
+            "Access-Control-Allow-Methods": "GET, HEAD",
+            "Cache-Control": "public, max-age=300",
         });
     }
 
     var url=new URL(request.url);
 
-    if(request.headers.has("range")&&!request.headers.get("range").match(new RegExp("^bytes=(\\d+)-(\\d+)?$"))) {
-        return new Response("Range Not Satisfiable", {
-            status: 416,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=300",
-            },
+    if(request.headers.has("range")&&!request.headers.get("range").match(new RegExp("^bytes=(\\d+)?-(\\d+)?$"))) {
+        return build_error_response("Range Not Satisfiable", 416, {
+            "Cache-Control": "public, max-age=300",
         });
     }
 
@@ -359,15 +351,11 @@ var main_handler=async function(request, env) {
     // To ensure the signed results are the same
     try {
         if(path.toLowerCase().includes("%2f")) {
-            return new Response("Bad Request", {
-                status: 400,
-            });
+            return build_error_response("Bad Request", 400);
         }
         path=decodeURIComponent(path);
     } catch {
-        return new Response("Bad Request", {
-            status: 400,
-        });
+        return build_error_response("Bad Request", 400);
     }
 
     // Split the path into segments
@@ -375,7 +363,7 @@ var main_handler=async function(request, env) {
 
     if(path_seg.length>=2) {
         if(path_seg[0]===settings_instance.CUSTOM_PATH_SIGN_KEY0&&path_seg[1]===settings_instance.CUSTOM_PATH_SIGN_KEY1) {
-            return new Response(await custom_sign_path(path_seg.slice(2).join("/")), {
+            return new Response(await custom_sign_path(path_seg.slice(2).join("/"), settings_instance), {
                 status: 200,
             });
         }
@@ -392,7 +380,7 @@ var main_handler=async function(request, env) {
         if(path_seg.length<=0) {
             flag_req_is_dir=true;
         }
-        if(cli_auth!==await custom_sign_path(path_seg.join("/"))) {
+        if(cli_auth!==await custom_sign_path(path_seg.join("/"), settings_instance)) {
             error_flag=true;
             break;
         }
@@ -400,24 +388,16 @@ var main_handler=async function(request, env) {
     } while(false);
 
     if(error_flag) {
-        return new Response("Bucket Not Found", {
-            status: 400,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=21600",
-            },
+        return build_error_response("Path Signature Mismatch", 400, {
+            "Cache-Control": "public, max-age=21600",
         });
     }
 
     // USER WARNING: flag_req_is_dir CANNOT fully detect whether the path is ACTUALLY a directory or not
 
     if(!variable_is_true(settings_instance.ALLOW_LIST_BUCKET)&&flag_req_is_dir) {
-        return new Response("Directory Listing Not Allowed", {
-            status: 403,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=300",
-            },
+        return build_error_response("Directory Listing Not Allowed", 403, {
+            "Cache-Control": "public, max-age=300",
         });
     }
 
@@ -443,16 +423,11 @@ var main_handler=async function(request, env) {
     }
 
     // IP rate limit for public download path
-    var limit_result=await check_ip_rate_limit(request, env);
+    var limit_result=await check_ip_rate_limit(request, env, settings_instance);
     if(!limit_result.ok) {
-        return new Response("Too Many Requests", {
-            status: 429,
-            headers: {
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "no-store",
-                "Retry-After": String(limit_result.retryAfter || 1),
-                "Content-Type": "text/plain; charset=utf-8",
-            },
+        return build_error_response("Too Many Requests", 429, {
+            "Cache-Control": "no-store",
+            "Retry-After": String(limit_result.retryAfter || 1),
         });
     }
 
@@ -463,7 +438,7 @@ var main_handler=async function(request, env) {
     // Certain headers, such as x-real-ip, appear in the incoming request but
     // are removed from the outgoing request. If they are in the outgoing
     // signed headers, B2 can't validate the signature.
-    var headers=filter_headers(request.headers);
+    var headers=filter_headers(request.headers, settings_instance);
 
     // Remove query params before sign
     url.search="";
@@ -520,12 +495,8 @@ var main_handler=async function(request, env) {
         if(attempts <= 0) {
             console.error("Tried range request for "+signed_request.url+" "+settings_instance.RANGE_RETRY_ATTEMPTS+" times, but no content-range in response.");
             if(response.ok) {
-                return new Response("An unexpected backend error occurred. Please contact the admin.", {
-                    status: 500,
-                    headers: {
-                        "Access-Control-Allow-Origin": "*",
-                        "Cache-Control": "public, max-age=300",
-                    },
+                return build_error_response("An unexpected backend error occurred. Please contact the admin.", 500, {
+                    "Cache-Control": "public, max-age=300",
                 });
             }
         }

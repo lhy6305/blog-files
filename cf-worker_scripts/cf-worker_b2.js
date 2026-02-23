@@ -1,16 +1,11 @@
 
 // Modified from https://github.com/backblaze-b2-samples/cloudflare-b2/blob/main/index.js and https://github.com/backblaze-b2-samples/cloudflare-b2-proxy/blob/master/index.js by ly65
 
-// Proxy Backblaze S3 compatible API requests, sending notifications to a webhook
-//
-// Adapted from https://github.com/obezuk/worker-signed-s3-template
-//
-
 import { DurableObject } from "cloudflare:workers";
 
 import { AwsClient } from './aws4fetch.js'
 
-var settings= {
+var settings_instance= {
     "ALLOW_LIST_BUCKET": false,
     "ALLOWED_HEADERS": [
         "content-type",
@@ -33,13 +28,16 @@ var settings= {
     "ENABLE_IP_RATE_LIMIT": true,
     "RATE_LIMIT_WINDOW_SEC": 15,
     "RATE_LIMIT_MAX_REQ": 30,
+    "RATE_LIMIT_FAIL_OPEN": false,
     "RATE_LIMIT_BLOCK_SEC": 600, // Set to 0 to disable the block/ban function
 
     // Note: set the following params in the cloudflare dashboard to prevent possible leaking
     // B2_APPLICATION_KEY, B2_APPLICATION_KEY_ID, B2_ENDPOINT, BUCKET_NAME
-    // Also dont't forget to set the CUSTOM_PATH_SIGN_SALT variable
+    // Also don't forget to set the CUSTOM_PATH_SIGN_SALT variable
     // CUSTOM_PATH_SIGN_KEY0, CUSTOM_PATH_SIGN_KEY1
 };
+
+var settings_instance= {};
 
 var UNSIGNABLE_HEADERS=[
                            // These headers appear in the request, but are not passed upstream
@@ -57,7 +55,7 @@ var filter_headers=function(headers) {
     return new Headers(Array.from(headers.entries()).filter(pair =>
                        !UNSIGNABLE_HEADERS.includes(pair[0])
                        && !pair[0].startsWith("cf-")
-                       && !("ALLOWED_HEADERS" in settings && !settings.ALLOWED_HEADERS.includes(pair[0]))
+                       && !("ALLOWED_HEADERS" in settings_instance && !settings_instance.ALLOWED_HEADERS.includes(pair[0]))
                                                            ));
 }
 
@@ -75,15 +73,15 @@ var hash_func=async function(algo, str) {
 };
 
 var custom_sign_path=async function(str) {
-    if(!("CUSTOM_PATH_SIGN_SALT" in settings)||typeof settings.CUSTOM_PATH_SIGN_SALT!=="string"||settings.CUSTOM_PATH_SIGN_SALT.length<=0) {
+    if(!("CUSTOM_PATH_SIGN_SALT" in settings_instance)||typeof settings_instance.CUSTOM_PATH_SIGN_SALT!=="string"||settings_instance.CUSTOM_PATH_SIGN_SALT.length<=0) {
         throw new Error("CUSTOM_PATH_SIGN_SALT not set");
     }
-    var hash1=await hash_func("SHA-512", str+settings.CUSTOM_PATH_SIGN_SALT+str);
-    var hash2=await hash_func("SHA-384", hash1+settings.CUSTOM_PATH_SIGN_SALT+str+settings.CUSTOM_PATH_SIGN_SALT);
-    var hash3=await hash_func("SHA-384", hash2+settings.CUSTOM_PATH_SIGN_SALT+hash1+settings.CUSTOM_PATH_SIGN_SALT);
-    var hash4=await hash_func("SHA-256", hash2+str+hash3+settings.CUSTOM_PATH_SIGN_SALT+hash1);
-    var hash5=await hash_func("SHA-256", hash3+str+hash1+settings.CUSTOM_PATH_SIGN_SALT+hash4+str+hash2);
-    return hash5.substr(0, 24);
+    var hash1=await hash_func("SHA-512", str+settings_instance.CUSTOM_PATH_SIGN_SALT+str);
+    var hash2=await hash_func("SHA-384", hash1+settings_instance.CUSTOM_PATH_SIGN_SALT+str+settings_instance.CUSTOM_PATH_SIGN_SALT);
+    var hash3=await hash_func("SHA-384", hash2+settings_instance.CUSTOM_PATH_SIGN_SALT+hash1+settings_instance.CUSTOM_PATH_SIGN_SALT);
+    var hash4=await hash_func("SHA-256", hash2+str+hash3+settings_instance.CUSTOM_PATH_SIGN_SALT+hash1);
+    var hash5=await hash_func("SHA-256", hash3+str+hash1+settings_instance.CUSTOM_PATH_SIGN_SALT+hash4+str+hash2);
+    return hash5.slice(0, 24);
 };
 
 var aws_region;
@@ -109,7 +107,7 @@ var verify_signature = async function(request) {
     signedHeaders = signedHeaders.split(';');
 
     // Verify that the request was signed with the expected key
-    if(credential[0] != settings.B2_APPLICATION_KEY_ID) {
+    if(credential[0] != settings_instance.B2_APPLICATION_KEY_ID) {
         throw new Error("application key id not valid");
     }
 
@@ -166,12 +164,12 @@ var get_client_ip=function(request) {
 };
 
 var check_ip_rate_limit=async function(request, env) {
-    if(!variable_is_true(settings.ENABLE_IP_RATE_LIMIT)) {
-        return {ok:true};
+    if(!variable_is_true(settings_instance.ENABLE_IP_RATE_LIMIT)) {
+        return {ok: true};
     }
     if(!env.IP_RATE_LIMITER) {
         console.error("IP_RATE_LIMITER binding not found, skipping rate limit");
-        return {ok:true};
+        return {ok: true};
     }
     var ip=get_client_ip(request);
     var id=env.IP_RATE_LIMITER.idFromName(ip);
@@ -179,13 +177,13 @@ var check_ip_rate_limit=async function(request, env) {
     var resp=null;
     try {
         resp=await stub.fetch("https://rate-limit/check", {
-            method:"POST",
-            headers:{"content-type":"application/json"},
-            body:JSON.stringify({
+            method: "POST",
+            headers: {"content-type":"application/json"},
+            body: JSON.stringify({
                 now: Date.now(),
-                windowSec: Number(settings.RATE_LIMIT_WINDOW_SEC||10),
-                maxReq: Number(settings.RATE_LIMIT_MAX_REQ||40),
-                blockSec: Number(settings.RATE_LIMIT_BLOCK_SEC||0),
+                windowSec: Math.min(Number(settings_instance.RATE_LIMIT_WINDOW_SEC||10), 1),
+                maxReq: Math.min(Number(settings_instance.RATE_LIMIT_MAX_REQ||40), 1),
+                blockSec: Math.min(Number(settings_instance.RATE_LIMIT_BLOCK_SEC||0), 0),
             }),
         });
         var data=await resp.json().catch(()=>( {
@@ -205,7 +203,7 @@ var check_ip_rate_limit=async function(request, env) {
         }
     } catch {
         return {
-            ok: true,
+            ok: variable_is_true(settings_instance.RATE_LIMIT_FAIL_OPEN),
             reason: "limiter_throw_exception",
         };
     }
@@ -237,7 +235,6 @@ var build_429_response_from_block_until=function(blockUntilMs) {
     var retryAfterSec=Math.max(1, Math.ceil((blockUntilMs-Date.now())/1000));
     return new Response("Too Many Requests", {
         status: 429,
-        statusText: null,
         headers: {
             "Access-Control-Allow-Origin": "*",
             // Do not store the 429 response
@@ -261,17 +258,17 @@ var build_upstream_403_marker_response=function(blockUntilMs) {
 
 var main_handler=async function(request, env) {
 
-    // Variables set in env have higher priority than those in settings
-    settings=Object.assign(settings, env);
+    // Variables set in env have higher priority than those in settings_instance
+    settings_instance=Object.assign(settings, env);
 
     // Extract the region from the endpoint
     // This should NOT throw an error, unless you set the B2_ENDPOINT wrongly
-    aws_region=settings.B2_ENDPOINT.match(new RegExp("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$"))[1];
+    aws_region=settings_instance.B2_ENDPOINT.match(new RegExp("^s3\\.([a-zA-Z0-9-]+)\\.backblazeb2\\.com$"))[1];
 
     // Create an S3 API client that can sign the outgoing request
     client=new AwsClient({
-        "accessKeyId": settings.B2_APPLICATION_KEY_ID,
-        "secretAccessKey": settings.B2_APPLICATION_KEY,
+        "accessKeyId": settings_instance.B2_APPLICATION_KEY_ID,
+        "secretAccessKey": settings_instance.B2_APPLICATION_KEY,
         "sessionToken": null,
         "service": "s3",
         "region": aws_region,
@@ -290,7 +287,7 @@ var main_handler=async function(request, env) {
             // signed headers, B2 can't validate the signature.
 
             var url = new URL(request.url);
-            url.hostname = settings.B2_ENDPOINT;
+            url.hostname = settings_instance.B2_ENDPOINT;
             // Send the signed request to B2 and wait for the upstream response
             return fetch(await client.sign(url, {
                 method: request.method,
@@ -300,8 +297,7 @@ var main_handler=async function(request, env) {
         }
     } catch(e) {
         return new Response("api request cannot be verified: "+e.message, {
-            status: 500,
-            statusText: null,
+            status: 400,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Content-Type": "text/plain; charset=utf-8",
@@ -316,7 +312,6 @@ var main_handler=async function(request, env) {
     if(!["GET", "HEAD"].includes(request.method)) {
         return new Response("Method Not Allowed", {
             status: 405,
-            statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, HEAD",
@@ -330,7 +325,6 @@ var main_handler=async function(request, env) {
     if(request.headers.has("range")&&!request.headers.get("range").match(new RegExp("^bytes=(\\d+)-(\\d+)?$"))) {
         return new Response("Range Not Satisfiable", {
             status: 416,
-            statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "public, max-age=300",
@@ -357,11 +351,15 @@ var main_handler=async function(request, env) {
 
     // To ensure the signed results are the same
     try {
+        if(path.toLowerCase().contains("%2f")) {
+            return new Response("Bad Request", {
+                status: 400,
+            });
+        }
         path=decodeURIComponent(path);
     } catch {
         return new Response("Bad Request", {
             status: 400,
-            statusText: null,
         });
     }
 
@@ -369,10 +367,9 @@ var main_handler=async function(request, env) {
     var path_seg=path.split("/");
 
     if(path_seg.length>=2) {
-        if(path_seg[0]===settings.CUSTOM_PATH_SIGN_KEY0&&path_seg[1]===settings.CUSTOM_PATH_SIGN_KEY1) {
+        if(path_seg[0]===settings_instance.CUSTOM_PATH_SIGN_KEY0&&path_seg[1]===settings_instance.CUSTOM_PATH_SIGN_KEY1) {
             return new Response(await custom_sign_path(path_seg.slice(2).join("/")), {
                 status: 200,
-                statusText: null,
             });
         }
     }
@@ -398,7 +395,6 @@ var main_handler=async function(request, env) {
     if(error_flag) {
         return new Response("Bucket Not Found", {
             status: 400,
-            statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "public, max-age=21600",
@@ -408,10 +404,9 @@ var main_handler=async function(request, env) {
 
     // USER WARNING: flag_req_is_dir CANNOT fully detect whether the path is ACTUALLY a directory or not
 
-    if(!variable_is_true(settings.ALLOW_LIST_BUCKET)&&flag_req_is_dir) {
+    if(!variable_is_true(settings_instance.ALLOW_LIST_BUCKET)&&flag_req_is_dir) {
         return new Response("Directory Listing Not Allowed", {
             status: 403,
-            statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "public, max-age=300",
@@ -424,7 +419,7 @@ var main_handler=async function(request, env) {
     }
 
     // Bucket name is specified in the BUCKET_NAME variable
-    url.hostname=settings.BUCKET_NAME + "." + settings.B2_ENDPOINT;
+    url.hostname=settings_instance.BUCKET_NAME + "." + settings_instance.B2_ENDPOINT;
 
     // Check cached upstream-403 marker first
     var edgeCache=caches.default;
@@ -445,7 +440,6 @@ var main_handler=async function(request, env) {
     if(!limit_result.ok) {
         return new Response("Too Many Requests", {
             status: 429,
-            statusText: null,
             headers: {
                 "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "no-store",
@@ -479,7 +473,7 @@ var main_handler=async function(request, env) {
     // See https://community.cloudflare.com/t/cloudflare-worker-fetch-ignores-byte-request-range-on-initial-request/395047/4
     var ret;
     if(signed_request.headers.has("range")) {
-        var attempts=settings.RANGE_RETRY_ATTEMPTS;
+        var attempts=Math.min(Number(settings_instance.RANGE_RETRY_ATTEMPTS), 1);
         var response;
         do {
             var controller=new AbortController();
@@ -497,7 +491,7 @@ var main_handler=async function(request, env) {
             });
             if(response.headers.has("content-range")) {
                 // Only log if it didn't work first time
-                if(attempts < settings.RANGE_RETRY_ATTEMPTS) {
+                if(attempts < settings_instance.RANGE_RETRY_ATTEMPTS) {
                     console.log("Retry for "+signed_request.url+" succeeded - response has content-range header");
                 }
                 // Break out of loop and return the response
@@ -517,11 +511,10 @@ var main_handler=async function(request, env) {
         } while(attempts > 0);
 
         if(attempts <= 0) {
-            console.error("Tried range request for "+signed_request.url+" "+settings.RANGE_RETRY_ATTEMPTS+" times, but no content-range in response.");
+            console.error("Tried range request for "+signed_request.url+" "+settings_instance.RANGE_RETRY_ATTEMPTS+" times, but no content-range in response.");
             if(response.ok) {
-                return new Response("An unexpected backend error occured. Please contact the admin.", {
+                return new Response("An unexpected backend error occurred. Please contact the admin.", {
                     status: 500,
-                    statusText: null,
                     headers: {
                         "Access-Control-Allow-Origin": "*",
                         "Cache-Control": "public, max-age=300",

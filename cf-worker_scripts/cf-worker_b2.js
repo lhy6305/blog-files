@@ -6,6 +6,8 @@
 // Adapted from https://github.com/obezuk/worker-signed-s3-template
 //
 
+import { DurableObject } from "cloudflare:workers";
+
 import { AwsClient } from './aws4fetch.js'
 
 var settings= {
@@ -27,6 +29,11 @@ var settings= {
     ],
     // How many times to retry a range request where the response is missing content-range
     "RANGE_RETRY_ATTEMPTS": 3,
+
+    "ENABLE_IP_RATE_LIMIT": true,
+    "RATE_LIMIT_WINDOW_SEC": 15,
+    "RATE_LIMIT_MAX_REQ": 30,
+    "RATE_LIMIT_BLOCK_SEC": 600, // Set to 0 to disable the block/ban function
 
     // Note: set the following params in the cloudflare dashboard to prevent possible leaking
     // B2_APPLICATION_KEY, B2_APPLICATION_KEY_ID, B2_ENDPOINT, BUCKET_NAME
@@ -131,6 +138,56 @@ var verify_signature = async function(request) {
         throw new Error("signature mismatched");
     }
     return true;
+};
+
+var variable_is_true=function(v) {
+    return v===true || (typeof v === "string" && v.toLowerCase()==="true") || v==="1";
+};
+var variable_is_false=function(v) {
+    return v===false || (typeof v === "string" && v.toLowerCase()==="false") || v==="0";
+};
+
+var get_client_ip=function(request) {
+    var ip=request.headers.get("cf-connecting-ip");
+    if(ip && ip.length>0) return ip.trim();
+    //var xff=request.headers.get("x-forwarded-for");
+    //if(xff && xff.length>0) return xff.split(",")[0].trim();
+    return "0.0.0.0";
+};
+
+var check_ip_rate_limit=async function(request, env) {
+    if(!variable_is_true(settings.ENABLE_IP_RATE_LIMIT)) {
+        return {ok:true};
+    }
+    if(!env.IP_RATE_LIMITER) {
+        console.error("IP_RATE_LIMITER binding not found, skip rate limit");
+        return {ok:true};
+    }
+    var ip=get_client_ip(request);
+    var id=env.IP_RATE_LIMITER.idFromName(ip);
+    var stub=env.IP_RATE_LIMITER.get(id);
+    var resp=await stub.fetch("https://rate-limit/check", {
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+            now: Date.now(),
+            windowSec: Number(settings.RATE_LIMIT_WINDOW_SEC||10),
+            maxReq: Number(settings.RATE_LIMIT_MAX_REQ||40),
+            blockSec: Number(settings.RATE_LIMIT_BLOCK_SEC||0),
+        }),
+    });
+    var data=await resp.json().catch(()=>( {
+        ok:false, reason:"invalid_limiter_response"
+    }));
+    if(resp.status===429 || data.ok===false) {
+        return {
+            ok:false,
+            retryAfter: data.retryAfter||1,
+            reason: data.reason||"rate_limited",
+        };
+    }
+    // fallback if DO failed
+    return {ok:true};
 };
 
 var main_handler=async function(request, env) {
@@ -275,7 +332,7 @@ var main_handler=async function(request, env) {
 
     // USER WARNING: flag_req_is_dir CANNOT fully detect whether the path is ACTUALLY a directory or not
 
-    if(!(settings.ALLOW_LIST_BUCKET===true||settings.ALLOW_LIST_BUCKET==="true"||settings.ALLOW_LIST_BUCKET==="1")&&flag_req_is_dir) {
+    if(!variable_is_true(settings.ALLOW_LIST_BUCKET)&&flag_req_is_dir) {
         return new Response("Directory Listing Not Allowed", {
             status: 403,
             statusText: null,
@@ -292,6 +349,21 @@ var main_handler=async function(request, env) {
 
     // Bucket name is specified in the BUCKET_NAME variable
     url.hostname=settings.BUCKET_NAME + "." + settings.B2_ENDPOINT;
+
+    // IP rate limit for public download path
+    var limit_result=await check_ip_rate_limit(request, env);
+    if(!limit_result.ok) {
+        return new Response("Too Many Requests", {
+            status: 429,
+            statusText: null,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "no-store",
+                "Retry-After": String(limit_result.retryAfter || 1),
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+        });
+    }
 
     var force_download=(url.searchParams.has("dl")?url.searchParams.get("dl"):null);
     var custom_mime=(url.searchParams.has("mime")?url.searchParams.get("mime"):null);
@@ -384,7 +456,7 @@ var main_handler=async function(request, env) {
         });
     }
 
-    if(force_download===null||force_download=="0"||force_download.toLowerCase()=="false") {
+    if(variable_is_false(force_download)) {
         force_download=false;
     } else {
         force_download=true;
@@ -417,3 +489,63 @@ export default {
         return main_handler(request, env);
     },
 };
+
+export class IPRateLimiterDO extends DurableObject {
+    constructor(state, env) {
+        super(state, env);
+        this.state = state;
+        this.env = env;
+    }
+
+    async fetch(request) {
+        if(request.method !== "POST") {
+            return new Response("Method Not Allowed", { status: 405 });
+        }
+
+        var cfg = await request.json().catch(()=>( {}));
+        var now = Number(cfg.now)||Date.now();
+        var windowMs = (Number(cfg.windowSec)||10)*1000;
+        var maxReq = Number(cfg.maxReq)||40;
+        var blockMs = (Number(cfg.blockSec)||0)*1000;
+
+        var data = await this.state.storage.get("d");
+        if(!data) {
+            data = {hits:[], blockedUntil:0, violations:0};
+        }
+
+        if(data.blockedUntil && now < data.blockedUntil) {
+            var retry = Math.ceil((data.blockedUntil - now)/1000);
+            return Response.json({
+                ok: false,
+                reason: "rate_limited",
+                retryAfter: retry
+            }, { status: 429 });
+        }
+
+        data.hits=(data.hits||[]).filter(ts => (now - ts) < windowMs);
+
+        if(data.hits.length >= maxReq) {
+            data.violations=(data.violations||0)+1;
+
+            if(blockMs>0 && data.violations>=2) {
+                data.blockedUntil=now+blockMs;
+            }
+
+            await this.state.storage.put("d", data);
+            return Response.json({
+                ok:false,
+                reason:"rate_limited",
+                retryAfter: 1
+            }, { status: 429 });
+        }
+
+        data.hits.push(now);
+        if(data.violations>0) data.violations -= 1;
+        await this.state.storage.put("d", data);
+
+        return Response.json({
+            ok:true,
+            remaining: maxReq - data.hits.length
+        }, { status: 200 });
+    }
+}

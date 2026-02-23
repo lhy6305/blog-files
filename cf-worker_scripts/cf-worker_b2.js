@@ -369,12 +369,14 @@ var main_handler=async function(request, env) {
         }
     }
 
+    if(path_seg.length<=0) {
+        return build_error_response("Bucket Mot Found", 404, {
+            "Cache-Control": "public, max-age=21600",
+        });
+    }
+
     var error_flag=false;
     do {
-        if(path_seg.length<=0) {
-            error_flag=true;
-            break;
-        }
         var cli_auth=path_seg.shift();
         url.pathname=path_seg.join("/");
         if(path_seg.length<=0) {

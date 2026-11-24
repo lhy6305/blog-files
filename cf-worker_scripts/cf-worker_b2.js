@@ -273,6 +273,13 @@ var build_error_response=function(message, status, extraHeaders) {
 
 var main_handler=async function(request, env) {
 
+    var url = new URL(request.url);
+    if(url.protocol!=="https:") {
+        url.protocol = "https:";
+        url.port = "443";
+        return Response.redirect(url.toString(), 301);
+    }
+
     // Variables set in env have higher priority than those in settings_instance
     var settings_instance=Object.assign({}, settings, env);
 
@@ -292,7 +299,7 @@ var main_handler=async function(request, env) {
         "initRetryMs": null,
     });
 
-    // First check if the request is an api request
+    // First, check if the request is an api request
     try {
         // false: not an api request
         // throw error: is an api request, but cannot verify

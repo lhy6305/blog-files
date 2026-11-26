@@ -1,53 +1,114 @@
 // cf-worker_b2-transparent.js
 // ---------------------------------------------------------------------------
-// Transparent Backblaze B2 (S3 API) proxy for Cloudflare Workers.
+// Two planes over one Backblaze B2 (S3) bucket.
 //
-// Contract:
-//   - rewrite the authority only; the endpoint decides path-style vs vhost-style
-//   - re-sign (SigV4 signs the Host line, so changing the host always kills it)
-//   - forward method / path / query / body / every other header verbatim
-//   - return the upstream response untouched
+//   control plane   "Authorization: AWS4-HMAC-SHA256" is present.
+//                   Verified against INBOUND_*, then re-signed with B2_ADMIN_*
+//                   and forwarded with every byte after the authority intact:
+//                   method, path, query, body, headers. This is the plane that
+//                   rclone / aws-cli / any S3 client talks to. It never reads or
+//                   writes the edge cache.
 //
-// The inbound request MUST carry a valid AWS4-HMAC-SHA256 signature made with
-// B2_APPLICATION_KEY_ID / B2_APPLICATION_KEY. This is not a public gateway;
-// unsigned requests get the exact 403 body B2 itself would return.
+//   public plane    everything else: an anonymous, read-only file server.
+//                   GET/HEAD only. The whole query is dropped (the listing
+//                   parameters survive behind ALLOW_LIST_BUCKET, ?dl/?fn are
+//                   consumed here). Signed upstream with B2_READONLY_*, edge
+//                   cached, IP rate limited, and behind the upstream-403
+//                   breaker.
+//
+// A request carrying a signature never falls through to the public plane: it is
+// either verified, or answered with the 403 body B2 itself returns.
+//
+// The public plane rewrites response headers (nosniff, CORS, Cache-Control,
+// attachment). The control plane returns the upstream response as it is.
 //
 // Derived from https://github.com/backblaze-b2-samples/cloudflare-b2-proxy
 // ---------------------------------------------------------------------------
 
-import { AwsClient } from './aws4fetch.js';
+import { DurableObject } from "cloudflare:workers";
+import { AwsClient } from "./aws4fetch.js";
 
-// ---------------------------------------------------------------------------
-// Two different things, usually derived from one string:
-//
-//   UPSTREAM_HOST  (= B2_ENDPOINT)  what we connect to; becomes the Host header.
-//                                   "s3.us-west-004.backblazeb2.com"            -> path-style
-//                                   "my-bucket.s3.us-west-004.backblazeb2.com"  -> vhost-style
-//                                   This is the ONLY value that appears on the wire.
-//
-//   SIGNING_REGION (= B2_REGION)    feeds nothing but the SigV4 credential scope
-//                                   "<date>/<region>/s3/aws4_request" and the
-//                                   signing-key derivation. Never sent anywhere.
-//
-// SIGNING_REGION is parsed out of UPSTREAM_HOST; B2_REGION exists only to override
-// that parse (custom domains, explicit ports, non-B2 upstreams). Setting both is
-// optional; setting them inconsistently is not an override, it is a broken signature.
-// ---------------------------------------------------------------------------
-const RE_B2_S3_HOST = /^(?:[^.]{1,63}\.)?s3\.([a-z0-9-]+)\.backblazeb2\.com$/i;
+// Edge-cache namespace. Every cache entry this worker stores is keyed under this
+// synthetic origin, so an object URL can never collide with a marker, and the
+// control plane can never read an entry the public plane wrote.
+const INTERNAL_ORIGIN = "https://cache.internal";
+const PUBLIC_CACHE_PREFIX = INTERNAL_ORIGIN + "/dl";
+const CONTROL_CACHE_PREFIX = INTERNAL_ORIGIN + "/ctl";
+const PATH_MARKER_PREFIX = INTERNAL_ORIGIN + "/marker/path";
+const BREAKER_KEY = INTERNAL_ORIGIN + "/marker/breaker";
 
-// Never forwarded upstream: hop-by-hop headers, plus the four that SigV4 forces us
-// to regenerate (host / authorization / x-amz-date / x-amz-content-sha256).
-const DROP = [
-    "host",                  // fetch() always derives it from the target URL
-    "authorization",         // re-signed below
-    "x-amz-date",            // re-signed below
-    "x-amz-security-token",  // long-lived key here; a stale token would be rejected
-    "x-amz-content-sha256",  // recomputed below
+const settings = {
+    // Public plane kill switch. Off -> every anonymous request is a plain 404.
+    "ENABLE_PUBLIC_PLANE": true,
+    "ENABLE_DOWNLOAD_CACHE": true,
+    // Bucket-level operations (listing) on both planes. Trailing-slash paths are
+    // treated as directory requests for parity with the original worker.
+    "ALLOW_LIST_BUCKET": false,
+
+    // 36h / 5min / 6h. Browser TTL is deliberately not "immutable": keys are
+    // overwritable, so a cached body must be allowed to go stale.
+    "DL_CACHE_TTL_SEC": 129600,
+    "DL_CACHE_404_TTL_SEC": 300,
+    "DL_BROWSER_TTL_SEC": 21600,
+    "RANGE_RETRY_ATTEMPTS": 3,
+
+    "ENABLE_IP_RATE_LIMIT": true,
+    "RATE_LIMIT_WINDOW_SEC": 15,
+    "RATE_LIMIT_MAX_REQ": 30,
+    "RATE_LIMIT_BLOCK_SEC": 600,      // 0 disables blocking
+    "RATE_LIMIT_FAIL_OPEN": false,
+
+    // B2 daily caps reset at 00:00 UTC, so a 403 blocks until then; while the
+    // breaker is open one request per interval is let through to re-probe.
+    "ENABLE_403_BREAKER": true,
+    "BREAKER_PROBE_INTERVAL_SEC": 60,
+
+    "B2_DEBUG": false,
+};
+
+// Group 1 is the bucket prefix of a virtual-hosted endpoint, group 2 the region.
+// Both are absent for a custom or path-style endpoint, which is why BUCKET_NAME
+// exists: the public plane has to know where the bucket lives.
+const RE_B2_S3_HOST = /^(?:([^.]{1,63})\.)?s3\.([a-z0-9-]+)\.backblazeb2\.com$/i;
+
+// SigV4 forces us to regenerate these, and Workers refuses to send some of them.
+const DROP_REQUEST_HEADERS = [
+    "host",
+    "authorization",
+    "x-amz-date",
+    "x-amz-security-token",
+    "x-amz-content-sha256",
     "connection",
     "transfer-encoding",
     "expect",                // 100-continue is not supported in Workers
     "x-amzn-trace-id",
 ];
+
+// The only visitor headers that reach the public plane's upstream request. A
+// whitelist, because anything else would either break the signature or hand B2
+// a header we did not sign.
+const PUBLIC_FORWARD_REQUEST_HEADERS = [
+    "range",
+    "if-match",
+    "if-none-match",
+    "if-modified-since",
+    "if-unmodified-since",
+];
+
+const LISTING_PARAMS = [
+    "list-type",
+    "delimiter",
+    "prefix",
+    "marker",
+    "continuation-token",
+    "start-after",
+    "max-keys",
+    "encoding-type",
+];
+
+// Custom metadata and B2's info headers can carry internal notes; the public
+// plane is world-readable, so they do not leave the worker.
+const STRIP_RESPONSE_HEADER_PREFIXES = ["x-amz-meta-", "x-bz-"];
 
 // Byte-exact copy of the 403 B2 returns for an unauthenticated S3 request
 // (captured 2026-11-24 from https://s3.us-west-004.backblazeb2.com/, 180 bytes).
@@ -58,7 +119,7 @@ const DENY_BODY =
     "    <Message>Unauthenticated requests are not allowed for this api</Message>\n" +
     "</Error>\n";
 
-var rand_hex = function(bytes) {
+var rand_hex = function (bytes) {
     var a = new Uint8Array(bytes);
     crypto.getRandomValues(a);
     var s = "";
@@ -68,54 +129,95 @@ var rand_hex = function(bytes) {
     return s;
 };
 
-var deny_403 = function() {
+// Dashboard variables are strings; the defaults in `settings` are typed. Both
+// forms must work, and a stray space or newline from a copy-paste must not
+// silently flip a switch off. Only "true" and "1" count as on, so a typo always
+// fails closed (the switch stays off) rather than opening something.
+var variable_is_true = function (v) {
+    if (v === true) return true;
+    if (typeof v !== "string") return false;
+    var normalized = v.trim().toLowerCase();
+    return normalized === "true" || normalized === "1";
+};
+
+// Same story for numbers, with one extra rule: a written 0 is a real value, not
+// "unset". `Number("0") || fallback` would turn a deliberate 0 into the default,
+// which is exactly the silent fallback this codebase refuses to do.
+var number_or = function (value, fallback) {
+    if (value === null || value === undefined || String(value).trim() === "") return fallback;
+    var parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+var get_client_ip = function (request) {
+    // Set by Cloudflare and overwritten on the way in; x-forwarded-for is
+    // client-controlled and is deliberately not consulted.
+    var ip = request.headers.get("cf-connecting-ip");
+    if (ip && ip.length > 0) return ip.trim();
+    return "0.0.0.0";
+};
+
+var deny_as_b2_403 = function () {
     return new Response(DENY_BODY, {
         status: 403,
         headers: {
             "Content-Type": "application/xml",
-            // No explicit Content-Length: the runtime derives it from the body (180),
-            // and a hand-set value is one more thing that can throw.
             "Cache-Control": "max-age=0, no-cache, no-store",
             "Strict-Transport-Security": "max-age=63072000",
+            "X-Content-Type-Options": "nosniff",
             "x-amz-request-id": rand_hex(8),
         },
     });
 };
 
-var build_error_response = function(message, status) {
-    return new Response(message, {
-        status: status,
-        headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "Cache-Control": "max-age=0, no-cache, no-store",
-        },
-    });
+var build_error_response = function (message, status, extra_headers) {
+    var headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "max-age=0, no-cache, no-store",
+    };
+    Object.keys(extra_headers || {}).forEach(function (k) { headers[k] = extra_headers[k]; });
+    return new Response(message, { status: status, headers: headers });
 };
 
 // Misconfiguration details go to the log only -- the visitor gets a bare 500, so
-// the response never names an env var, an endpoint or a region. Logged once per
-// isolate: a bad config is a deploy-level constant, not a per-request event.
-var CONFIG_LOGGED = false;
-var DEBUG = false;              // B2_DEBUG=1: name the failing check in the 500 body
+// the response never names an env var, an endpoint or a region. Each distinct
+// problem is logged once per isolate: a bad config is a deploy-level constant,
+// not a per-request event, but a second, different problem must still show up.
+var CONFIG_LOGGED = new Set();
+var B2_DEBUG_ON = false;
 
-var config_error = function(problem, detail) {
-    if (!CONFIG_LOGGED) {
-        CONFIG_LOGGED = true;
+var config_error = function (problem, detail) {
+    if (!CONFIG_LOGGED.has(problem)) {
+        CONFIG_LOGGED.add(problem);
         console.error(JSON.stringify(Object.assign({ "event": "misconfig", "problem": problem }, detail)));
     }
-    return DEBUG ? "Internal Server Error: " + problem : "Internal Server Error";
+    return B2_DEBUG_ON ? "Internal Server Error: " + problem : "Internal Server Error";
+};
+
+var upstream_error = function (event, message) {
+    console.error(JSON.stringify({ "event": event, "error": String(message) }));
+};
+
+// For conditions that are constant per deploy (a missing binding, say), so a
+// public request flood cannot turn one mistake into a log flood.
+var LOGGED_ONCE = new Set();
+var upstream_error_once = function (event, message) {
+    var key = event + "|" + String(message);
+    if (LOGGED_ONCE.has(key)) return;
+    LOGGED_ONCE.add(key);
+    upstream_error(event, message);
 };
 
 // Credential=KEYID/20261124/us-west-004/s3/aws4_request
-var parse_scope = function(authorization) {
+var parse_scope = function (authorization) {
     var m = /Credential=([^,]+)/.exec(authorization || "");
     if (!m) { return null; }
     var p = m[1].split("/");
     if (p.length !== 5) { return null; }
-    return { "key_id": p[0], "date": p[1], "region": p[2], "service": p[3] };
+    return { "key_id": p[0], "region": p[2], "service": p[3] };
 };
 
-var reason_hint = function(reason) {
+var reason_hint = function (reason) {
     if (/header .* not found/.test(reason)) {
         return "a signed header did not arrive; Cloudflare rewrites accept-encoding and adds cf-*/x-forwarded-*, so those must stay out of SignedHeaders";
     }
@@ -123,21 +225,17 @@ var reason_hint = function(reason) {
         return "the client and this worker disagree on signed headers, canonical path, query order or credential scope";
     }
     if (/key id/.test(reason)) {
-        return "the client signs with a different key id than B2_APPLICATION_KEY_ID";
+        return "the client signs with a key id that is not INBOUND_ACCESS_KEY_ID";
     }
     return "";
 };
 
 var VERIFY_LOG_BUDGET = 10;
 
-var upstream_error = function(message) {
-    console.error(JSON.stringify({ "event": "upstream_error", "error": String(message) }));
-};
-
 // ---------------------------------------------------------------------------
-// Inbound signature verification -- unchanged from the original worker.
+// Inbound signature verification (control plane only).
 // ---------------------------------------------------------------------------
-var verify_signature = async function(request, settings_instance, client) {
+var verify_signature = async function (request, inbound_key_id, verify_inbound) {
     var authorization = request.headers.get("Authorization");
     if (!authorization) {
         return false;
@@ -155,10 +253,10 @@ var verify_signature = async function(request, settings_instance, client) {
     }
     var [, credential, signedHeaders, signature] = matched;
 
-    credential = credential.split('/');
-    signedHeaders = signedHeaders.split(';');
+    credential = credential.split("/");
+    signedHeaders = signedHeaders.split(";");
 
-    if (credential[0] !== settings_instance.B2_APPLICATION_KEY_ID) {
+    if (credential[0] !== inbound_key_id) {
         throw new Error("application key id not valid");
     }
 
@@ -176,9 +274,10 @@ var verify_signature = async function(request, settings_instance, client) {
         return obj;
     }, {});
 
-    // No body: for s3 the payload hash comes from x-amz-content-sha256, so aws4fetch
-    // never reads it. Passing the stream here would only risk locking it.
-    var signedRequest = await client.sign(request.url, {
+    // No body: for s3 the payload hash comes from x-amz-content-sha256, so
+    // aws4fetch never reads it (verified against 1.0.20). Passing the stream
+    // here would only risk locking it.
+    var inbound_resigned = await verify_inbound.sign(request.url, {
         method: request.method,
         headers: headersToSign,
         aws: {
@@ -187,7 +286,7 @@ var verify_signature = async function(request, settings_instance, client) {
         },
     });
 
-    var generatedAuthorization = signedRequest.headers.get("Authorization");
+    var generatedAuthorization = inbound_resigned.headers.get("Authorization");
     var generatedMatched = generatedAuthorization && generatedAuthorization.match(re);
     if (!generatedMatched) {
         throw new Error("unsupported authorization type");
@@ -201,99 +300,281 @@ var verify_signature = async function(request, settings_instance, client) {
 };
 
 // ---------------------------------------------------------------------------
-// Transparent passthrough
+// URL / path helpers
 // ---------------------------------------------------------------------------
-var main_handler = async function(request, env) {
+var split_request_url = function (request_url) {
+    var tail = request_url.replace(/^[a-z]+:\/\/[^/?#]+/i, "");
+    if (tail === "") {
+        tail = "/";
+    }
+    var query_index = tail.indexOf("?");
+    return {
+        "path": query_index < 0 ? tail : tail.slice(0, query_index),
+        "query": query_index < 0 ? "" : tail.slice(query_index + 1),
+    };
+};
 
-    // ---- config -----------------------------------------------------------
-    var cfg = Object.assign({}, env);
-    DEBUG = String(cfg.B2_DEBUG || "") === "1";
+// Parity with the original worker: a path ending in "/" is treated as a
+// directory request. It cannot distinguish a real directory from an object
+// whose name ends in "/", which is why ALLOW_LIST_BUCKET defaults to false.
+var is_list_request = function (path, params) {
+    if (path === "/" || path === "" || path.endsWith("/")) return true;
+    for (var i = 0; i < LISTING_PARAMS.length; i++) {
+        if (params.has(LISTING_PARAMS[i])) return true;
+    }
+    return false;
+};
 
-    // An unbound secret makes AwsClient throw before anything else can log, so it
-    // is checked explicitly: names only, never values, and only to the log.
-    var key_id = String(cfg.B2_APPLICATION_KEY_ID || "").trim();
-    var key_secret = String(cfg.B2_APPLICATION_KEY || "").trim();
-    if (!key_id || !key_secret) {
-        return build_error_response(config_error("credentials not bound to this environment", {
-            "has_key_id": !!key_id,
-            "has_secret": !!key_secret,
+// https://cache.internal/dl<path> -- stable across requests, so a range request,
+// a ?dl download and a plain GET all share one entry.
+var make_public_cache_key = function (path) {
+    return PUBLIC_CACHE_PREFIX + path;
+};
+
+// ---------------------------------------------------------------------------
+// Upstream-403 breaker. B2 answers a daily cap with 403 until 00:00 UTC, so the
+// marker lives exactly that long; a per-path marker stops repeat offenders, the
+// global breaker stops every *other* path from being tried once each.
+// ---------------------------------------------------------------------------
+var next_midnight_utc_ms = function () {
+    var now = new Date();
+    var next = new Date(now);
+    next.setUTCHours(24, 0, 0, 0);
+    return next.getTime();
+};
+
+var seconds_until = function (until_ms) {
+    return Math.max(1, Math.ceil((until_ms - Date.now()) / 1000));
+};
+
+var make_block_entry = function (block_until_ms) {
+    // 200, not 204: the Cache API only stores statuses it considers cacheable.
+    return new Response(null, {
+        status: 200,
+        headers: {
+            "x-block-until": String(block_until_ms),
+            "x-last-probe": String(Date.now()),
+            "Cache-Control": "public, max-age=" + String(seconds_until(block_until_ms)),
+        },
+    });
+};
+
+var make_path_marker_key = function (path) {
+    return new Request(PATH_MARKER_PREFIX + path);
+};
+
+var build_429_response = function (block_until_ms) {
+    return new Response("Too Many Requests", {
+        status: 429,
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+            "Retry-After": String(seconds_until(block_until_ms)),
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Content-Type-Options": "nosniff",
+        },
+    });
+};
+
+// Cache failures must never turn into a 500: the marker is an optimisation for
+// the upstream, not a correctness requirement.
+var cache_get = async function (key) {
+    try {
+        return await caches.default.match(key);
+    } catch (e) {
+        upstream_error("cache_read_failed", e);
+        return null;
+    }
+};
+
+var cache_put = async function (key, response) {
+    try {
+        await caches.default.put(key, response);
+    } catch (e) {
+        upstream_error("cache_write_failed", e);
+    }
+};
+
+var cache_delete = async function (key) {
+    try {
+        await caches.default.delete(key);
+    } catch (e) {
+        upstream_error("cache_delete_failed", e);
+    }
+};
+
+var mark_upstream_403 = async function (path, cfg) {
+    var block_until_ms = next_midnight_utc_ms();
+    await cache_put(make_path_marker_key(path), make_block_entry(block_until_ms));
+    if (variable_is_true(cfg.ENABLE_403_BREAKER)) {
+        await cache_put(BREAKER_KEY, make_block_entry(block_until_ms));
+    }
+    return block_until_ms;
+};
+
+// blocked: a 429 Response when the request must not reach the upstream.
+// breaker_open: whether a breaker entry was seen, so the caller knows if a
+// successful response owes it a delete (a cache delete per request is not free).
+var check_upstream_403_state = async function (path, cfg) {
+    var now = Date.now();
+
+    var marker_key = make_path_marker_key(path);
+    var marker = await cache_get(marker_key);
+    if (marker) {
+        var marker_until = Number(marker.headers.get("x-block-until") || 0);
+        if (marker_until > now) {
+            return { "blocked": build_429_response(marker_until), "breaker_open": false };
+        }
+        await cache_delete(marker_key);
+    }
+
+    if (!variable_is_true(cfg.ENABLE_403_BREAKER)) {
+        return { "blocked": null, "breaker_open": false };
+    }
+
+    var breaker = await cache_get(BREAKER_KEY);
+    if (!breaker) {
+        return { "blocked": null, "breaker_open": false };
+    }
+    var breaker_until = Number(breaker.headers.get("x-block-until") || 0);
+    if (breaker_until <= now) {
+        await cache_delete(BREAKER_KEY);
+        return { "blocked": null, "breaker_open": false };
+    }
+    var last_probe = Number(breaker.headers.get("x-last-probe") || 0);
+    var probe_interval_ms = Math.max(number_or(cfg.BREAKER_PROBE_INTERVAL_SEC, 60), 1) * 1000;
+    if (now - last_probe < probe_interval_ms) {
+        return { "blocked": build_429_response(breaker_until), "breaker_open": true };
+    }
+    // Half-open: this request is the probe. Move the window forward now so a
+    // burst of one IP cannot turn the probe slot into an open door.
+    await cache_put(BREAKER_KEY, make_block_entry(breaker_until));
+    return { "blocked": null, "breaker_open": true };
+};
+
+// ---------------------------------------------------------------------------
+// IP rate limit (Durable Object, see IPRateLimiterDO at the bottom)
+// ---------------------------------------------------------------------------
+var check_ip_rate_limit = async function (request, env, cfg) {
+    if (!variable_is_true(cfg.ENABLE_IP_RATE_LIMIT)) {
+        return { "ok": true };
+    }
+    if (!env.IP_RATE_LIMITER) {
+        upstream_error_once("limiter_binding_missing", "IP_RATE_LIMITER not bound, skipping rate limit");
+        return { "ok": true };
+    }
+    var client_ip = get_client_ip(request);
+    var stub = env.IP_RATE_LIMITER.get(env.IP_RATE_LIMITER.idFromName(client_ip));
+    try {
+        var resp = await stub.fetch("https://rate-limit/check", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                now: Date.now(),
+                window_sec: Math.max(number_or(cfg.RATE_LIMIT_WINDOW_SEC, 15), 1),
+                max_req: Math.max(number_or(cfg.RATE_LIMIT_MAX_REQ, 30), 1),
+                block_sec: Math.max(number_or(cfg.RATE_LIMIT_BLOCK_SEC, 0), 0),
+            }),
+        });
+        var data = await resp.json().catch(() => ({ "ok": false, "reason": "invalid_limiter_response" }));
+        if (resp.status === 429 || data.ok === false) {
+            return {
+                "ok": false,
+                "retry_after_sec": Number(data.retryAfter) || 1,
+                "reason": data.reason || "rate_limited",
+            };
+        }
+        if (resp.status === 200 && data.ok === true) {
+            return { "ok": true };
+        }
+        return { "ok": variable_is_true(cfg.RATE_LIMIT_FAIL_OPEN), "reason": "unexpected_limiter_response" };
+    } catch (e) {
+        upstream_error("limiter_failed", e);
+        return { "ok": variable_is_true(cfg.RATE_LIMIT_FAIL_OPEN), "reason": "limiter_throw_exception" };
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Credentials. Three pairs, three jobs, and no pair may repeat another's value:
+// a public or inbound secret that equals the admin secret is the leak this
+// worker exists to avoid.
+// ---------------------------------------------------------------------------
+const CREDENTIAL_PAIRS = [
+    ["INBOUND_ACCESS_KEY_ID", "INBOUND_SECRET_ACCESS_KEY"],
+    ["B2_ADMIN_KEY_ID", "B2_ADMIN_KEY"],
+    ["B2_READONLY_KEY_ID", "B2_READONLY_KEY"],
+];
+
+var check_credentials_distinct = function (cfg) {
+    var seen_ids = {};
+    var seen_secrets = {};
+    for (var i = 0; i < CREDENTIAL_PAIRS.length; i++) {
+        var id = String(cfg[CREDENTIAL_PAIRS[i][0]] || "").trim();
+        var secret = String(cfg[CREDENTIAL_PAIRS[i][1]] || "").trim();
+        if (!id && !secret) continue;
+        if (id && seen_ids[id]) {
+            return CREDENTIAL_PAIRS[i][0] + " has the same value as " + seen_ids[id];
+        }
+        if (secret && seen_secrets[secret]) {
+            return CREDENTIAL_PAIRS[i][1] + " has the same value as " + seen_secrets[secret];
+        }
+        if (id) seen_ids[id] = CREDENTIAL_PAIRS[i][0];
+        if (secret) seen_secrets[secret] = CREDENTIAL_PAIRS[i][1];
+    }
+    return null;
+};
+
+var make_signer = function (key_id, secret, service, region) {
+    return new AwsClient({
+        "accessKeyId": key_id,
+        "secretAccessKey": secret,
+        "sessionToken": null,
+        "service": service,
+        "region": region,
+        "cache": null,
+        "retries": 0,       // sign() only; client.fetch() is never used
+        "initRetryMs": null,
+    });
+};
+
+// ---------------------------------------------------------------------------
+// Control plane: verified, then forwarded verbatim.
+// ---------------------------------------------------------------------------
+var handle_control_plane = async function (request, env, cfg, upstream_host, signing_region, authorization) {
+    var inbound_key_id = String(cfg.INBOUND_ACCESS_KEY_ID || "").trim();
+    var inbound_secret = String(cfg.INBOUND_SECRET_ACCESS_KEY || "").trim();
+    var admin_key_id = String(cfg.B2_ADMIN_KEY_ID || "").trim();
+    var admin_secret = String(cfg.B2_ADMIN_KEY || "").trim();
+    if (!inbound_key_id || !inbound_secret || !admin_key_id || !admin_secret) {
+        return build_error_response(config_error("control plane credentials not bound", {
+            "has_inbound_key_id": !!inbound_key_id,
+            "has_inbound_secret": !!inbound_secret,
+            "has_admin_key_id": !!admin_key_id,
+            "has_admin_secret": !!admin_secret,
             "bindings": Object.keys(env).join(","),
         }), 500);
     }
-
-    // UPSTREAM_HOST: what we connect to, and the value that ends up in the Host
-    // header. A bucket prefix selects virtual-hosted-style, its absence path-style.
-    var upstream_host = String(cfg.B2_ENDPOINT || "").trim()
-        .replace(/^https?:\/\//i, "")
-        .replace(/\/+$/, "")
-        .toLowerCase();
-
-    // Lowercased on both sides: SigV4 regions are lowercase, and a dashboard typo of
-    // "US-WEST-004" must not be reported as a conflict.
-    var region_override = String(cfg.B2_REGION || "").trim().toLowerCase();
-    var parsed_region   = (RE_B2_S3_HOST.exec(upstream_host) || [])[1] || "";
-
-    if (!upstream_host) {
-        return build_error_response(config_error("B2_ENDPOINT is empty", {}), 500);
+    var conflict = check_credentials_distinct(cfg);
+    if (conflict) {
+        return build_error_response(config_error("credential pairs must not repeat", { "conflict": conflict }), 500);
     }
 
-    // Both given but different is not an override, it is a broken signature: the
-    // region is baked into both the credential scope and the signing key.
-    if (region_override && parsed_region && region_override !== parsed_region) {
-        return build_error_response(config_error("B2_REGION conflicts with B2_ENDPOINT", {
-            "region_override": region_override,
-            "parsed_region": parsed_region,
-            "upstream_host": upstream_host,
-        }), 500);
-    }
-
-    // SIGNING_REGION: never sent anywhere, it only seeds the signature.
-    var signing_region = region_override || parsed_region;
-    if (!signing_region) {
-        return build_error_response(config_error("cannot derive region from B2_ENDPOINT", {
-            "upstream_host": upstream_host,
-            "hint": "set B2_REGION; it is not sent to B2, it only scopes the signature",
-        }), 500);
-    }
-
-    var client = new AwsClient({
-        "accessKeyId": key_id,
-        "secretAccessKey": key_secret,
-        "sessionToken": null,
-        "service": "s3",
-        "region": signing_region,
-        "cache": null,
-        "retries": null,
-        "initRetryMs": null,
-    });
-
-    // ---- 1. the inbound signature is the only gate -------------------------
-    // Verification has to reproduce what the CLIENT computed, so it uses the scope
-    // from the client's own credential string -- not our signing region. A client
-    // that signed for another region is still authentic; B2 judges the region.
-    var authorization = request.headers.get("Authorization") || "";
+    // Rebuild the signing client from the client's own credential scope: that is
+    // what it signed with, and the region is baked into both the scope and the
+    // signing key. Falling back to our own region would reject authentic clients.
     var scope = parse_scope(authorization);
-    var verify_client = client;
-
-    if (scope && scope.region && scope.service && scope.region !== signing_region) {
-        verify_client = new AwsClient({
-            "accessKeyId": key_id,
-            "secretAccessKey": key_secret,
-            "sessionToken": null,
-            "service": scope.service,
-            "region": scope.region,
-            "cache": null,
-            "retries": null,
-            "initRetryMs": null,
-        });
-    }
+    var verify_inbound = make_signer(
+        inbound_key_id,
+        inbound_secret,
+        (scope && scope.service) || "s3",
+        (scope && scope.region) || signing_region
+    );
 
     var verified = false;
     var verify_error = null;
     try {
-        verified = (await verify_signature(request, cfg, verify_client)) === true;
+        verified = (await verify_signature(request, inbound_key_id, verify_inbound)) === true;
     } catch (e) {
-        verified = false;
         verify_error = e;
     }
     if (!verified) {
@@ -305,34 +586,36 @@ var main_handler = async function(request, env) {
                 "reason": reason,
                 "hint": reason_hint(reason),
                 "scope": scope,
-                "authorization": authorization || null,
             }));
         }
-        if (DEBUG) {
+        if (B2_DEBUG_ON) {
             return build_error_response("Forbidden: " + reason, 403);
         }
-        return deny_403();
+        return deny_as_b2_403();
     }
 
-    // ---- 2. bodies that cannot be re-signed --------------------------------
+    // A body re-signed by us cannot be the aws-chunked framing the client signed.
     if (/aws-chunked/i.test(request.headers.get("content-encoding") || "")
         || /^STREAMING-/i.test(request.headers.get("x-amz-content-sha256") || "")) {
         return build_error_response("aws-chunked request body is not supported", 501);
+    }
+
+    var url_parts = split_request_url(request.url);
+
+    // bucket-level operations are gated on both planes, so a typo'd `rclone ls`
+    // cannot quietly enumerate the bucket
+    if ((request.method === "GET" || request.method === "HEAD")
+        && is_list_request(url_parts.path, new URLSearchParams(url_parts.query))
+        && !variable_is_true(cfg.ALLOW_LIST_BUCKET)) {
+        return build_error_response("Directory Listing Not Allowed", 403);
     }
 
     // Clone after verify, before the body is touched anywhere else.
     var has_body = request.method !== "GET" && request.method !== "HEAD";
     var body = has_body ? request.clone().body : null;
 
-    // ---- 3. upstream URL: every byte after the authority is preserved ------
-    var tail = request.url.replace(/^[a-z]+:\/\/[^/?#]+/i, "");
-    if (tail === "") {
-        tail = "/";
-    }
-
-    var qmark = tail.indexOf("?");
-    var path_part = qmark < 0 ? tail : tail.slice(0, qmark);
-    var query_part = qmark < 0 ? "" : tail.slice(qmark);
+    var path_part = url_parts.path;
+    var query_part = url_parts.query === "" ? "" : "?" + url_parts.query;
 
     // aws4fetch canonicalises the S3 path via decode->encode and maps a literal "+"
     // to a space; %2B keeps the signature and the bytes on the wire in sync.
@@ -346,75 +629,407 @@ var main_handler = async function(request, env) {
     var up_url = "https://" + upstream_host
         + (path_part.charAt(0) === "/" ? "" : "/") + path_part + query_part;
 
-    // ---- 4. outbound headers: all of them, minus the DROP list -------------
-    var out = new Headers(request.headers);
-    DROP.forEach(function(h) { out.delete(h); });
+    var forward_headers = new Headers(request.headers);
+    DROP_REQUEST_HEADERS.forEach(function (h) { forward_headers.delete(h); });
 
-    // ---- 5. sign host + x-amz-* only --------------------------------------
-    // Signing more would break: Cloudflare rewrites accept-encoding *after* we sign,
-    // and cf-* / x-forwarded-* only exist on the way out.
-    var to_sign = {};
-    out.forEach(function(v, k) { if (k.startsWith("x-amz-")) to_sign[k] = v; });
+    // Sign host + x-amz-* only. Signing more would break: Cloudflare rewrites
+    // accept-encoding *after* we sign, and cf-*/x-forwarded-* only exist on the
+    // way out.
+    var headers_to_sign = {};
+    forward_headers.forEach(function (v, k) { if (k.startsWith("x-amz-")) headers_to_sign[k] = v; });
 
-    // A real payload hash supplied by the client stays valid (we forward the same
-    // body); anything else is left to aws4fetch, which sets UNSIGNED-PAYLOAD.
-    // Read it from the inbound headers: it was dropped from `out` above.
-    var client_sha = request.headers.get("x-amz-content-sha256") || "";
-    if ((/^[0-9a-f]{64}$/i).test(client_sha)) {
-        to_sign["x-amz-content-sha256"] = client_sha;
+    // A real payload hash supplied by the client stays valid (the body is
+    // forwarded unchanged); anything else is left to aws4fetch, which sets
+    // UNSIGNED-PAYLOAD for s3. Read it from the inbound headers: it was dropped
+    // from forward_headers above.
+    var inbound_payload_sha256 = request.headers.get("x-amz-content-sha256") || "";
+    if ((/^[0-9a-f]{64}$/i).test(inbound_payload_sha256)) {
+        headers_to_sign["x-amz-content-sha256"] = inbound_payload_sha256;
     }
 
-    // ---- 6. re-sign for the new host --------------------------------------
-    var signed = await client.sign(up_url, {
+    var sign_admin = make_signer(admin_key_id, admin_secret, "s3", signing_region);
+    var outbound_signed = await sign_admin.sign(up_url, {
         method: request.method,
-        headers: to_sign,
+        headers: headers_to_sign,
         body: body,
     });
 
-    // ---- 7. splice the fresh signature into the full header set -----------
     // aws4fetch ties "what gets signed" to "what gets sent"; we need them apart.
-    var fwd = new Headers(out);
-    fwd.set("authorization", signed.headers.get("authorization"));
-    fwd.set("x-amz-date", signed.headers.get("x-amz-date"));
-    fwd.set("x-amz-content-sha256", signed.headers.get("x-amz-content-sha256") || "UNSIGNED-PAYLOAD");
+    var signed_forward_headers = new Headers(forward_headers);
+    signed_forward_headers.set("authorization", outbound_signed.headers.get("authorization"));
+    signed_forward_headers.set("x-amz-date", outbound_signed.headers.get("x-amz-date"));
+    signed_forward_headers.set("x-amz-content-sha256", outbound_signed.headers.get("x-amz-content-sha256") || "UNSIGNED-PAYLOAD");
 
-    // ---- 8. passthrough, response untouched -------------------------------
+    var resp;
     try {
-        var resp = await fetch(new Request(signed.url, {
+        var outbound_request;
+        var outbound_init = {
             method: request.method,
-            headers: fwd,
+            headers: signed_forward_headers,
             body: body,
             redirect: "manual",   // never follow: our Authorization is bound to the host we signed
-        }));
-
-        // B2 answers a cross-region request with a 301 that names the real endpoint.
-        // Following it is impossible (host-bound signature) and handing it to the client
-        // would leak the endpoint and let it bypass the worker -- so it becomes a 502.
-        // 304 is a legitimate conditional-GET answer and is NOT in this list.
-        if (resp.status === 301 || resp.status === 302 || resp.status === 303
-            || resp.status === 307 || resp.status === 308) {
-            // The location still points at the real endpoint, so it goes to the log and
-            // nowhere else -- the visitor only ever learns that the gateway is broken.
-            console.error(JSON.stringify({
-                "event": "upstream_redirect",
-                "status": resp.status,
-                "region": resp.headers.get("x-amz-bucket-region") || null,
-                "location": resp.headers.get("location") || null,
-            }));
-            return build_error_response("Bad Gateway", 502);
+        };
+        try {
+            outbound_request = new Request(outbound_signed.url, outbound_init);
+        } catch (e) {
+            // Node/undici insists on duplex for a streaming body; Workers ignores it.
+            if (!(e instanceof TypeError) || !body) throw e;
+            outbound_request = new Request(outbound_signed.url, Object.assign({ "duplex": "half" }, outbound_init));
         }
-
-        return resp;
+        resp = await fetch(outbound_request, {
+            cf: {
+                // The control plane must not read what the public plane cached,
+                // and nothing of its own is worth caching.
+                cacheEverything: false,
+                cacheTtl: 0,
+                cacheKey: CONTROL_CACHE_PREFIX + path_part,
+            },
+        });
     } catch (e) {
-        upstream_error((e && e.message) || e);
+        upstream_error("upstream_fetch_failed", (e && e.message) || e);
         return build_error_response("Bad Gateway", 502);
     }
+
+    // B2 answers a cross-region request with a 301 that names the real endpoint.
+    // Following it is impossible (host-bound signature) and handing it to the
+    // client would leak the endpoint and let it bypass the worker -- so it
+    // becomes a 502. 304 is a legitimate conditional-GET answer and is not here.
+    if (resp.status === 301 || resp.status === 302 || resp.status === 303
+        || resp.status === 307 || resp.status === 308) {
+        console.error(JSON.stringify({
+            "event": "upstream_redirect",
+            "status": resp.status,
+            "region": resp.headers.get("x-amz-bucket-region") || null,
+            "location": resp.headers.get("location") || null,
+        }));
+        return build_error_response("Bad Gateway", 502);
+    }
+
+    // A write just invalidated whatever the public plane has under that path.
+    if (resp.status < 300 && (request.method === "PUT" || request.method === "DELETE" || request.method === "POST")) {
+        await cache_delete(make_public_cache_key(path_part));
+    }
+
+    var control_headers = new Headers(resp.headers);
+    control_headers.set("X-Content-Type-Options", "nosniff");
+    return new Response(resp.body, {
+        status: resp.status,
+        statusText: resp.statusText,
+        headers: control_headers,
+    });
+};
+
+// ---------------------------------------------------------------------------
+// Public plane: anonymous, read-only, cached.
+// ---------------------------------------------------------------------------
+var read_attachment_params = function (params) {
+    // ?dl with no value counts as true; ?dl=0 turns it off. ?fn only names the
+    // file -- without ?dl it changes nothing, which is the original behaviour.
+    var forced = false;
+    if (params.has("dl")) {
+        var value = params.get("dl");
+        forced = value === "" || variable_is_true(value);
+    }
+    var filename = params.has("fn") ? params.get("fn") : null;
+    if (filename !== null) {
+        filename = filename.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 255);
+        if (filename === "") filename = null;
+    }
+    return { "forced": forced, "filename": filename };
+};
+
+var build_content_disposition = function (filename) {
+    // filename="中文.pdf" throws (Headers values are byte strings), so the
+    // RFC 5987 form is the only one that survives non-ASCII names.
+    if (filename === null) return "attachment";
+    return "attachment; filename*=UTF-8''" + encodeURIComponent(filename);
+};
+
+var build_public_response = function (upstream_response, attachment, cfg) {
+    var headers = new Headers(upstream_response.headers);
+    Array.from(headers.keys()).forEach(function (name) {
+        for (var i = 0; i < STRIP_RESPONSE_HEADER_PREFIXES.length; i++) {
+            if (name.startsWith(STRIP_RESPONSE_HEADER_PREFIXES[i])) {
+                headers.delete(name);
+                return;
+            }
+        }
+    });
+
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("Access-Control-Expose-Headers", "accept-ranges, content-range, content-length, etag");
+    headers.set("X-Content-Type-Options", "nosniff");
+
+    if (!headers.has("content-type")) {
+        headers.set("Content-Type", "application/octet-stream");
+    }
+    if (attachment.forced && (upstream_response.status === 200 || upstream_response.status === 206)) {
+        try {
+            headers.set("Content-Disposition", build_content_disposition(attachment.filename));
+        } catch (e) {
+            headers.set("Content-Disposition", "attachment");
+        }
+    }
+
+    var browser_ttl = upstream_response.status === 200 || upstream_response.status === 206
+        ? Math.max(number_or(cfg.DL_BROWSER_TTL_SEC, 21600), 0)
+        : 300;
+    headers.set("Cache-Control", "public, max-age=" + String(browser_ttl));
+
+    var body = upstream_response.status === 304 || upstream_response.status === 204
+        ? null
+        : upstream_response.body;
+    return new Response(body, {
+        status: upstream_response.status,
+        statusText: upstream_response.statusText,
+        headers: headers,
+    });
+};
+
+var handle_public_plane = async function (request, env, cfg, upstream_host, signing_region, host_bucket) {
+    if (!variable_is_true(cfg.ENABLE_PUBLIC_PLANE)) {
+        return build_error_response("Not Found", 404);
+    }
+
+    if (request.method === "OPTIONS") {
+        return new Response(null, {
+            status: 204,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD",
+                "Access-Control-Allow-Headers": "range, if-match, if-none-match, if-modified-since, if-unmodified-since",
+                "Access-Control-Expose-Headers": "accept-ranges, content-range, content-length, etag",
+                "Access-Control-Max-Age": "86400",
+                "Cache-Control": "public, max-age=86400",
+            },
+        });
+    }
+
+    if (request.method !== "GET" && request.method !== "HEAD") {
+        return build_error_response("Method Not Allowed", 405, {
+            "Allow": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=300",
+        });
+    }
+
+    var readonly_key_id = String(cfg.B2_READONLY_KEY_ID || "").trim();
+    var readonly_secret = String(cfg.B2_READONLY_KEY || "").trim();
+    if (!readonly_key_id || !readonly_secret) {
+        return build_error_response(config_error("public plane requires B2_READONLY_KEY_ID and B2_READONLY_KEY", {
+            "has_readonly_key_id": !!readonly_key_id,
+            "has_readonly_secret": !!readonly_secret,
+            "bindings": Object.keys(env).join(","),
+        }), 500);
+    }
+    var conflict = check_credentials_distinct(cfg);
+    if (conflict) {
+        return build_error_response(config_error("credential pairs must not repeat", { "conflict": conflict }), 500);
+    }
+
+    var url_parts = split_request_url(request.url);
+    var public_path = url_parts.path.replace(/\+/g, "%2B");
+    if (/%2f/i.test(public_path)) {
+        return build_error_response("Bad Request", 400, { "Access-Control-Allow-Origin": "*" });
+    }
+
+    // Where the bucket lives: virtual-hosted endpoints already carry it, a
+    // path-style or custom endpoint needs BUCKET_NAME or the visitor's key would
+    // be read as a bucket name.
+    var upstream_path;
+    if (host_bucket) {
+        upstream_path = public_path;
+    } else {
+        var bucket_name = String(cfg.BUCKET_NAME || "").trim();
+        if (!bucket_name) {
+            return build_error_response(config_error("BUCKET_NAME is required for the public plane on this endpoint", {
+                "upstream_host": upstream_host,
+            }), 500);
+        }
+        upstream_path = "/" + bucket_name + (public_path.charAt(0) === "/" ? public_path : "/" + public_path);
+    }
+
+    var params = new URLSearchParams(url_parts.query);
+    var wants_listing = is_list_request(public_path, params);
+    if (wants_listing && !variable_is_true(cfg.ALLOW_LIST_BUCKET)) {
+        return build_error_response("Directory Listing Not Allowed", 403, {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=300",
+        });
+    }
+
+    // Listing parameters are the only part of the query that ever reaches the
+    // upstream; everything else (including ?dl/?fn) is consumed here. That keeps
+    // the cache key to the set of real object names, so a visitor cannot mint
+    // fresh cache entries by appending random parameters.
+    var upstream_query = "";
+    if (wants_listing) {
+        var kept = new URLSearchParams();
+        LISTING_PARAMS.forEach(function (name) {
+            if (params.has(name)) kept.set(name, params.get(name));
+        });
+        upstream_query = kept.toString();
+    }
+
+    var attachment = read_attachment_params(params);
+
+    var block_state = await check_upstream_403_state(public_path, cfg);
+    if (block_state.blocked) {
+        return block_state.blocked;
+    }
+
+    var limit = await check_ip_rate_limit(request, env, cfg);
+    if (!limit.ok) {
+        return build_error_response("Too Many Requests", 429, {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+            "Retry-After": String(limit.retry_after_sec || 1),
+        });
+    }
+
+    var forward_headers = new Headers();
+    PUBLIC_FORWARD_REQUEST_HEADERS.forEach(function (name) {
+        var value = request.headers.get(name);
+        if (value !== null) forward_headers.set(name, value);
+    });
+
+    var sign_readonly = make_signer(readonly_key_id, readonly_secret, "s3", signing_region);
+    var up_url = "https://" + upstream_host + upstream_path + (upstream_query === "" ? "" : "?" + upstream_query);
+    var outbound_signed = await sign_readonly.sign(up_url, {
+        method: request.method,
+        headers: forward_headers,
+    });
+
+    // Cached by object path, never by request: ?dl/?fn variants share one entry
+    // and only the response headers differ per request. GET only: a cached HEAD
+    // would store the response without a body.
+    var cf_options = variable_is_true(cfg.ENABLE_DOWNLOAD_CACHE) && !wants_listing && request.method === "GET"
+        ? {
+            cacheEverything: true,
+            cacheKey: make_public_cache_key(upstream_path),
+            cacheTtlByStatus: {
+                "200-299": Math.max(number_or(cfg.DL_CACHE_TTL_SEC, 129600), 0),
+                "404": Math.max(number_or(cfg.DL_CACHE_404_TTL_SEC, 300), 0),
+            },
+        }
+        : { cacheEverything: false, cacheTtl: 0, cacheKey: PUBLIC_CACHE_PREFIX + "/nocache" + upstream_path };
+
+    // For large files Cloudflare returns the entire file rather than the
+    // requested range. If the response has no content-range header, abort and
+    // retry -- the second attempt is usually served as a proper 206.
+    var resp;
+    if (outbound_signed.headers.has("range")) {
+        var attempts = Math.max(number_or(cfg.RANGE_RETRY_ATTEMPTS, 3), 1);
+        while (true) {
+            var controller = new AbortController();
+            resp = await fetch(outbound_signed.url, {
+                method: outbound_signed.method,
+                headers: outbound_signed.headers,
+                signal: controller.signal,
+                cf: cf_options,
+            });
+            if (resp.headers.has("content-range")) break;
+            if (!resp.ok) break;
+            attempts -= 1;
+            if (attempts <= 0) {
+                upstream_error("range_retry_exhausted", outbound_signed.url);
+                return build_error_response("An unexpected backend error occurred. Please contact the admin.", 500, {
+                    "Cache-Control": "public, max-age=300",
+                });
+            }
+            controller.abort();
+        }
+    } else {
+        resp = await fetch(outbound_signed, { cf: cf_options });
+    }
+
+    // 403 from a read-only key is never "that object is private" -- the bucket is
+    // public by design. It is a daily cap, a wrong capability or a disabled key,
+    // so it is treated as a systemic condition and kept away from the upstream.
+    if (resp.status === 403) {
+        // A listing 403 usually means the read-only key was not granted listFiles.
+        // That is a config mistake on one operation, not a bucket-wide cap, so it
+        // is passed through instead of taking the whole site down until midnight.
+        if (wants_listing) {
+            return build_public_response(resp, attachment, cfg);
+        }
+        var block_until_ms = await mark_upstream_403(public_path, cfg);
+        console.error(JSON.stringify({
+            "event": "upstream_403",
+            "path": public_path,
+            "request_id": resp.headers.get("x-amz-request-id") || null,
+            "block_until": block_until_ms,
+        }));
+        return build_429_response(block_until_ms);
+    }
+
+    // Any answer that is not a 403 means the upstream is healthy again; drop the
+    // breaker so a recovered quota is not hidden behind a stale marker.
+    if (block_state.breaker_open) {
+        await cache_delete(BREAKER_KEY);
+    }
+
+    return build_public_response(resp, attachment, cfg);
+};
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+var main_handler = async function (request, env) {
+    var url = new URL(request.url);
+    if (url.protocol !== "https:") {
+        url.protocol = "https:";
+        url.port = "443";
+        return Response.redirect(url.toString(), 301);
+    }
+
+    var cfg = Object.assign({}, settings, env);
+    B2_DEBUG_ON = variable_is_true(cfg.B2_DEBUG);
+
+    var upstream_host = String(cfg.B2_ENDPOINT || "").trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/+$/, "")
+        .toLowerCase();
+    if (!upstream_host) {
+        return build_error_response(config_error("B2_ENDPOINT is empty", {}), 500);
+    }
+
+    var host_match = RE_B2_S3_HOST.exec(upstream_host);
+    var host_bucket = (host_match && host_match[1]) || "";
+    var parsed_region = (host_match && host_match[2]) || "";
+    var region_override = String(cfg.B2_REGION || "").trim().toLowerCase();
+
+    // Lowercased on both sides: SigV4 regions are lowercase, and a dashboard typo
+    // of "US-WEST-004" must not be reported as a conflict.
+    if (region_override && parsed_region && region_override !== parsed_region) {
+        return build_error_response(config_error("B2_REGION conflicts with B2_ENDPOINT", {
+            "region_override": region_override,
+            "parsed_region": parsed_region,
+            "upstream_host": upstream_host,
+        }), 500);
+    }
+
+    // SIGNING_REGION: never sent anywhere, it only seeds the signature and the
+    // credential scope.
+    var signing_region = region_override || parsed_region;
+    if (!signing_region) {
+        return build_error_response(config_error("cannot derive region from B2_ENDPOINT", {
+            "upstream_host": upstream_host,
+            "hint": "set B2_REGION; it is not sent to B2, it only scopes the signature",
+        }), 500);
+    }
+
+    var authorization = request.headers.get("Authorization") || "";
+    if (authorization.startsWith("AWS4-HMAC-SHA256")) {
+        return handle_control_plane(request, env, cfg, upstream_host, signing_region, authorization);
+    }
+    return handle_public_plane(request, env, cfg, upstream_host, signing_region, host_bucket);
 };
 
 export default {
     async fetch(request, env) {
-        // Nothing may escape as an uncaught exception: that turns into a Cloudflare
-        // 500 with no trace of which check failed.
+        // Nothing may escape as an uncaught exception: that turns into a
+        // Cloudflare 500 with no trace of which check failed.
         try {
             return await main_handler(request, env);
         } catch (e) {
@@ -426,3 +1041,109 @@ export default {
         }
     },
 };
+
+// ---------------------------------------------------------------------------
+// Per-IP rate limiter.
+//
+// The counter is read-modify-write, so requests are serialised per instance:
+// without that, a burst of 100 concurrent requests all read the same hits[] and
+// all get allowed.
+//
+// State lives in memory and is flushed at most once per FLUSH_INTERVAL_MS. A
+// burst therefore costs one durable write instead of one per request, while a
+// drip (one request every few seconds, slow enough for the instance to be
+// evicted) still flushes every time -- otherwise eviction would silently restart
+// the window and the limiter would never fire.
+// ---------------------------------------------------------------------------
+const FLUSH_INTERVAL_MS = 1000;
+
+export class IPRateLimiterDO extends DurableObject {
+    constructor(state, env) {
+        super(state, env);
+        this.state = state;
+        this.data = null;
+        this.last_flush_ms = 0;
+        this.chain = Promise.resolve();
+    }
+
+    async fetch(request) {
+        if (request.method !== "POST") {
+            return new Response("Method Not Allowed", { status: 405 });
+        }
+        var body = await request.json().catch(() => ({}));
+        var result = await this.serialise(() => this.decide(body));
+        return Response.json(result, { status: result.ok ? 200 : 429 });
+    }
+
+    serialise(work) {
+        var next = this.chain.then(work, work);
+        this.chain = next.then(() => {}, () => {});
+        return next;
+    }
+
+    async decide(limit_request) {
+        var now = number_or(limit_request.now, Date.now());
+        var window_ms = Math.max(number_or(limit_request.window_sec, 15), 1) * 1000;
+        var max_req = Math.max(number_or(limit_request.max_req, 30), 1);
+        var block_ms = Math.max(number_or(limit_request.block_sec, 0), 0) * 1000;
+
+        var data = await this.load();
+        if (data.blocked_until_ms > now) {
+            return {
+                "ok": false,
+                "reason": "blocked",
+                "retryAfter": Math.ceil((data.blocked_until_ms - now) / 1000),
+            };
+        }
+        // A finished block starts a clean slate: violations from the previous
+        // window must not turn the next window into an instant block.
+        if (data.blocked_until_ms > 0) {
+            data.blocked_until_ms = 0;
+            data.violation_count = 0;
+            data.hits = [];
+        }
+
+        data.hits = data.hits.filter(function (ts) { return now - ts < window_ms; });
+
+        if (data.hits.length >= max_req) {
+            data.violation_count += 1;
+            if (block_ms > 0 && data.violation_count >= 2) {
+                data.blocked_until_ms = now + block_ms;
+            }
+            await this.flush(now, true);
+            return {
+                "ok": false,
+                "reason": "rate_limited",
+                "retryAfter": data.blocked_until_ms > now
+                    ? Math.ceil((data.blocked_until_ms - now) / 1000)
+                    : 1,
+            };
+        }
+
+        data.hits.push(now);
+        if (data.violation_count > 0) data.violation_count -= 1;
+        await this.flush(now, false);
+        return { "ok": true, "remaining": max_req - data.hits.length };
+    }
+
+    async load() {
+        if (this.data) return this.data;
+        // Validate instead of trusting: a stored entry from an older shape would
+        // otherwise turn violation_count into NaN, and NaN never trips the limit.
+        var stored = await this.state.storage.get("d");
+        this.data = {
+            "hits": Array.isArray(stored && stored.hits)
+                ? stored.hits.filter(function (ts) { return typeof ts === "number"; })
+                : [],
+            "blocked_until_ms": Number((stored && stored.blocked_until_ms) || 0) || 0,
+            "violation_count": Number((stored && stored.violation_count) || 0) || 0,
+        };
+        return this.data;
+    }
+
+    async flush(now, force) {
+        if (!force && now - this.last_flush_ms < FLUSH_INTERVAL_MS) return;
+        this.last_flush_ms = now;
+        await this.state.storage.put("d", this.data);
+    }
+}

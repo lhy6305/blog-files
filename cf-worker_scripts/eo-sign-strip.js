@@ -83,6 +83,33 @@ const DROP_EXACT = [
   'x-proxy-id',
   'x-edge-location',
   'x-litespeed-cache',
+  // S3 / COS 源站元数据：前缀已能覆盖，这里逐个列名是第二道网——前缀层曾因运行时
+  // keys()/forEach 与文档不符而整段失效过一次，那次这几个头全漏到了客户端。
+  'x-amz-id-2',
+  'x-amz-request-id',
+  'x-amz-server-side-encryption',
+  'x-amz-version-id',
+  'x-amz-delete-marker',
+  'x-amz-expiration',
+  'x-amz-restore',
+  'x-amz-storage-class',
+  'x-amz-replication-status',
+  'x-amz-tagging-count',
+  'x-amz-website-redirect-location',
+  'x-amz-object-lock-mode',
+  'x-amz-object-lock-retain-until-date',
+  'x-amz-object-lock-legal-hold',
+  'x-amz-server-side-encryption-aws-kms-key-id',
+  'x-amz-server-side-encryption-bucket-key-enabled',
+  'x-amz-server-side-encryption-context',
+  'x-amz-server-side-encryption-customer-algorithm',
+  'x-amz-server-side-encryption-customer-key-md5',
+  'x-amz-request-charged',
+  'x-amz-archive-status',
+  'x-amz-bucket-region',
+  'x-amz-missing-meta',
+  'x-amz-abort-date',
+  'x-amz-abort-rule-id',
   // Firefox 自己写进 header dump 的，不是服务端头
   'x-firefox-spdy',
 ];
@@ -105,7 +132,16 @@ const DROP_PREFIX = [
 
 // 前缀删除的例外：校验与完整性头动了会毁签名/校验，必须留。
 // 定长名字必须走全等，写成前缀会把 x-goog-hashx 这类一起放过。
-const KEEP_EXACT = ['x-amz-mp-parts-count', 'x-goog-hash', 'content-md5', 'digest', 'content-digest'];
+// cos/oss 的 crc64 同属校验值：前缀层一旦工作，x-cos- / x-oss- 就会把它们删掉。
+const KEEP_EXACT = [
+  'x-amz-mp-parts-count',
+  'x-cos-hash-crc64ecma',
+  'x-oss-hash-crc64ecma',
+  'x-goog-hash',
+  'content-md5',
+  'digest',
+  'content-digest',
+];
 const KEEP_PREFIX = ['x-amz-checksum-'];
 
 // CF 下发的 Cookie：浏览器从没和 CF 说过话，留着既是明文指纹又无作用。
@@ -346,25 +382,34 @@ function headerValueBytes(value) {
   return bytes;
 }
 
-// EdgeOne 文档声明 forEach 回调为 (name, value)；keys() 的迭代协议更不容易搞错顺序，
-// 优先用它，拿不到再退回 forEach——两条路都只取「头名」，不取「值」。
+// 实测装配（2026-11-27，探针 eo-probe-headers.js 跑在线上）：
+//   keys()    返回头名数组，没有 .next——盯着 next 判断会把唯一正确的那条路挡掉；
+//   forEach   回调是 (value, name)，文档写的 (name, value) 与事实相反。
+// 两条都按文档写，前缀层就整段空转：names 里全是「值」，一个前缀也匹配不上，
+// 而且不抛异常，静默漏头。这里三条路都按实测接线，谁先可用就用谁。
 function listHeaderNames(headers) {
   const names = [];
+
   if (typeof headers.keys === 'function') {
     try {
-      const iterator = headers.keys();
-      if (iterator && typeof iterator.next === 'function') {
-        for (let step = iterator.next(); !step.done; step = iterator.next()) {
+      const keys = headers.keys();
+      if (Array.isArray(keys)) {
+        for (let i = 0; i < keys.length; i++) names.push(String(keys[i]));
+        return names;
+      }
+      if (keys && typeof keys.next === 'function') {
+        for (let step = keys.next(); !step.done; step = keys.next()) {
           names.push(String(step.value));
         }
-        if (names.length) return names;
+        return names;
       }
     } catch (err) {
       /* 退回 forEach */
     }
   }
+
   if (typeof headers.forEach === 'function') {
-    headers.forEach(function (name) {
+    headers.forEach(function (value, name) {
       names.push(String(name));
     });
   }
